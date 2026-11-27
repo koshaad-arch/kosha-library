@@ -19,7 +19,7 @@ Future<void> openAmazon(BuildContext context, String url) async {
 class AmazonButton extends StatelessWidget {
   final String url;
   final String label;
-  const AmazonButton({super.key, required this.url, this.label = 'Amazon.in ↗'});
+  const AmazonButton({super.key, required this.url, this.label = 'Amazon ↗'});
   @override
   Widget build(BuildContext context) => FilledButton(
         style: FilledButton.styleFrom(
