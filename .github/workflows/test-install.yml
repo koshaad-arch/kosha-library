@@ -1,13 +1,15 @@
 name: Test install on emulator
 on:
-  push:
-    paths: ['.github/workflows/test-install.yml']
+  workflow_run:
+    workflows: ['Build APK']
+    types: [completed]
   workflow_dispatch:
 permissions:
   contents: write
 jobs:
   install:
     runs-on: ubuntu-latest
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     steps:
       - name: Enable KVM
         run: |
