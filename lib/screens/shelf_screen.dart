@@ -93,6 +93,16 @@ class _ShelfScreenState extends State<ShelfScreen> {
                   textAlign: TextAlign.center, style: TextStyle(color: AppColors.mute)),
             ),
           )
+        else if (store.statusFilter == 'reviewed')
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+            sliver: SliverList(
+              delegate: SliverChildBuilderDelegate(
+                (c, i) => _ReviewCard(book: books[i], showReal: store.showCovers),
+                childCount: books.length,
+              ),
+            ),
+          )
         else
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
@@ -355,6 +365,8 @@ class _BookTile extends StatelessWidget {
                 StatusPill(status: book.status),
                 if (book.isWish) const _MiniPill('🛒 To buy', Color(0xFFFFE0C2), Color(0xFF7A3D00)),
                 if (book.own == 'none') const _MiniPill('Not owned', Color(0xFFE9E2E6), Color(0xFF5A4A53)),
+                if (book.formatBadge.isNotEmpty) _MiniPill(book.formatBadge, const Color(0xFFE3ECF5), const Color(0xFF24425E)),
+                if (book.hasReview) const _MiniPill('✍', Color(0xFFFFF1C2), Color(0xFF6B4300)),
                 if (book.rating > 0) Stars(rating: book.rating, size: 12),
               ],
             ),
@@ -432,6 +444,9 @@ class _FilterBarState extends State<_FilterBar> {
       ('fav', '♥ Favourites'),
       ('own', '📚 Owned'),
       ('wish', '🛒 Wishlist'),
+      ('reviewed', '✍ Reviews'),
+      ('digital', '📱 Digital'),
+      ('physical', '📚 Physical'),
     ];
     return Material(
       color: Theme.of(context).scaffoldBackgroundColor,
@@ -687,6 +702,58 @@ class _Pager extends StatelessWidget {
           ],
         ),
       ],
+    );
+  }
+}
+
+
+/// One of your reviews, shown in full.
+class _ReviewCard extends StatelessWidget {
+  final Book book;
+  final bool showReal;
+  const _ReviewCard({required this.book, required this.showReal});
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final muted = scheme.onSurface.withValues(alpha: 0.6);
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () => openBook(context, book),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              BookCover(book: book, width: 64, showReal: showReal),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(book.title, style: serif(17, color: scheme.onSurface)),
+                    Text(book.firstAuthor, style: TextStyle(color: muted, fontSize: 13)),
+                    const SizedBox(height: 4),
+                    Row(children: [
+                      if (book.rating > 0) Stars(rating: book.rating, size: 15),
+                      if (book.end != null) Text('  · finished ${Book.dateLabel(book.end)}', style: TextStyle(color: muted, fontSize: 12)),
+                    ]),
+                    const SizedBox(height: 8),
+                    Text(book.review.trim(), style: const TextStyle(height: 1.45)),
+                    if (book.quote.trim().isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Text('“${book.quote.trim()}”', style: TextStyle(fontStyle: FontStyle.italic, color: muted)),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

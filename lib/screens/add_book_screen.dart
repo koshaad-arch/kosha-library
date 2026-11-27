@@ -25,6 +25,7 @@ class _AddBookScreenState extends State<AddBookScreen> {
   bool _loading = false;
   String _message = '';
   late String _own = widget.defaultOwn;
+  String _format = 'Paperback';
 
   @override
   void initState() {
@@ -111,7 +112,7 @@ class _AddBookScreenState extends State<AddBookScreen> {
         return;
       }
     }
-    final b = f.toBook(status, own: _own);
+    final b = f.toBook(status, own: _own)..format = _format;
     store.add(b);
     if (f.coverUrl.isEmpty) b.coverUrl = '';
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(_own == 'wish' ? 'Added “${b.title}” to your wishlist' : 'Added “${b.title}” to your shelf')));
@@ -197,6 +198,18 @@ class _AddBookScreenState extends State<AddBookScreen> {
             selected: {_own},
             showSelectedIcon: false,
             onSelectionChanged: (s) => setState(() => _own = s.first),
+          ),
+          const SizedBox(height: 10),
+          SegmentedButton<String>(
+            segments: const [
+              ButtonSegment(value: 'Paperback', label: Text('📚 Physical')),
+              ButtonSegment(value: 'Kindle', label: Text('📱 Kindle')),
+              ButtonSegment(value: 'eBook', label: Text('💻 eBook')),
+              ButtonSegment(value: 'Audiobook', label: Text('🎧 Audio')),
+            ],
+            selected: {_format},
+            showSelectedIcon: false,
+            onSelectionChanged: (s) => setState(() => _format = s.first),
           ),
           const SizedBox(height: 18),
           Text('…or type an ISBN or a title', style: TextStyle(color: muted)),

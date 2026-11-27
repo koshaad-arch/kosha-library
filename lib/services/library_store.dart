@@ -196,6 +196,7 @@ class LibraryStore extends ChangeNotifier {
         imageUrl: '',
         description: '',
         shelf: v(r, 'Exclusive Shelf'),
+        binding: v(r, 'Binding'),
         rating: double.tryParse(v(r, 'My Rating')) ?? 0,
         readAt: d(v(r, 'Date Read')),
         addedAt: d(v(r, 'Date Added')),
@@ -246,6 +247,8 @@ class LibraryStore extends ChangeNotifier {
         added++;
       }
       if (g.grId.isNotEmpty) b.goodreadsId = g.grId;
+      final fmt = GrItem.formatOf(g.binding);
+      if (fmt.isNotEmpty && (isNew || b.format == 'Paperback')) b.format = fmt;
       if (b.isbn.isEmpty && g.isbn.isNotEmpty) b.isbn = g.isbn;
       if (b.pages == null && g.pages != null) b.pages = g.pages;
       if (b.grSig == g.signature) continue; // unchanged on Goodreads since the last import
@@ -364,13 +367,16 @@ class LibraryStore extends ChangeNotifier {
         'wish' => b.isWish,
         'ownunread' => b.isOwned && b.status == ReadStatus.tbr,
         'readyr' => b.status == ReadStatus.read && b.end?.year == DateTime.now().year,
+        'reviewed' => b.hasReview,
+        'digital' => b.isDigital,
+        'physical' => !b.isDigital,
         _ => b.status.key == f,
       };
 
   static const filterNames = {
     'all': 'All', 'reading': 'Reading', 'tbr': 'Want to read', 'read': 'Read', 'dnf': 'Did not finish',
     'fav': 'Favourites', 'own': 'Owned', 'wish': 'Wishlist', 'ownunread': 'Owned, not read yet',
-    'readyr': 'Read this year',
+    'readyr': 'Read this year', 'reviewed': 'Reviewed', 'digital': 'Kindle & e-books', 'physical': 'Physical books',
   };
 
   int count(String status) => _books.where((b) => matchesFilter(b, status)).length;

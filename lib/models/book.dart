@@ -100,6 +100,17 @@ class Book {
 
   bool get isOwned => own == 'own';
   bool get isWish => own == 'wish';
+  bool get isDigital => format == 'Kindle' || format == 'eBook' || format == 'Audiobook';
+  bool get hasReview => review.trim().isNotEmpty;
+
+  /// Small badge for the shelf: how you have this book.
+  String get formatBadge => switch (format) {
+        'Kindle' => '📱 Kindle',
+        'eBook' => '💻 eBook',
+        'Audiobook' => '🎧 Audio',
+        'Hardcover' => '📕 Hardcover',
+        _ => '',
+      };
 
   /// Exact Amazon.in product page when we know the ISBN, otherwise a book search.
   String get amazonLink {

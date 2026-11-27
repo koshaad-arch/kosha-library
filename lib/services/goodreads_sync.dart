@@ -2,7 +2,7 @@ import '../models/book.dart';
 
 /// One book as it appears on a Goodreads shelf RSS feed.
 class GrItem {
-  final String grId, title, author, isbn, review, imageUrl, description, shelf;
+  final String grId, title, author, isbn, review, imageUrl, description, shelf, binding;
   final double rating;
   final DateTime? readAt, addedAt;
   final int? pages, year;
@@ -20,7 +20,19 @@ class GrItem {
     required this.addedAt,
     required this.pages,
     required this.year,
+    this.binding = '',
   });
+
+  /// Goodreads 'Binding' (e.g. Kindle Edition, Hardcover) -> the app's format.
+  static String formatOf(String binding) {
+    final b = binding.toLowerCase();
+    if (b.contains('kindle')) return 'Kindle';
+    if (b.contains('ebook') || b.contains('e-book') || b.contains('nook')) return 'eBook';
+    if (b.contains('audio')) return 'Audiobook';
+    if (b.contains('hardcover') || b.contains('hardback')) return 'Hardcover';
+    if (b.contains('paperback')) return 'Paperback';
+    return '';
+  }
 
   ReadStatus get status => switch (shelf) {
         'read' => ReadStatus.read,

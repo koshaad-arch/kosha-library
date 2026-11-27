@@ -14,6 +14,7 @@ jobs:
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
+      - uses: actions/checkout@v4
       - name: Download released APK
         run: curl -sL -o app.apk https://github.com/${{ github.repository }}/releases/download/latest/KoshasLibrary.apk && ls -la app.apk
       - uses: reactivecircus/android-emulator-runner@v2
@@ -23,22 +24,7 @@ jobs:
           target: google_apis
           disable-animations: true
           profile: pixel_6
-          script: |
-            adb install -r app.apk
-            adb shell monkey -p com.koshagandhi.kosha_library -c android.intent.category.LAUNCHER 1
-            sleep 25
-            adb exec-out screencap -p > shot1-shelf.png
-            adb shell input swipe 540 1900 540 500 400
-            sleep 3
-            adb exec-out screencap -p > shot2-scrolled.png
-            adb shell input tap 405 2310
-            sleep 6
-            adb exec-out screencap -p > shot3-wishlist.png
-            adb shell input tap 945 2310
-            sleep 6
-            adb exec-out screencap -p > shot4-stats.png
-            adb logcat -d | grep -iE "FATAL|flutter.*(error|exception)|E/flutter" | tail -80 > emu.log || true
-            adb shell wm size >> emu.log
+          script: bash tool/emu_flow.sh
       - uses: softprops/action-gh-release@v2
         if: always()
         with:
