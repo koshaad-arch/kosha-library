@@ -20,8 +20,8 @@ jobs:
       - name: Analyze and Goodreads check (informational)
         run: |
           flutter analyze --no-fatal-infos --no-fatal-warnings > build.log 2>&1 || true
-          dart run tool/gr_check.dart 1 >> build.log 2>&1 || true
-          dart run tool/gr_check.dart 4 >> build.log 2>&1 || true
+          dart run tool/gr_check.dart 152185079 >> build.log 2>&1 || true
+          dart run tool/gr_check.dart https://www.goodreads.com/user/show/5228124 >> build.log 2>&1 || true
           tail -40 build.log
       - name: Build APKs
         run: |
