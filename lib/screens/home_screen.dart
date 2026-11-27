@@ -14,12 +14,25 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _tab = 0;
+  bool _autoSynced = false;
+
+  Future<void> _autoSync(LibraryStore store) async {
+    final msg = await store.syncGoodreads(maxAge: const Duration(hours: 3));
+    if (msg != null && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final loaded = context.select<LibraryStore, bool>((s) => s.loaded);
     if (!loaded) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    if (!_autoSynced) {
+      _autoSynced = true;
+      final store = context.read<LibraryStore>();
+      WidgetsBinding.instance.addPostFrameCallback((_) => _autoSync(store));
     }
     return Scaffold(
       body: SafeArea(

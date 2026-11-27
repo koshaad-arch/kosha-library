@@ -48,6 +48,7 @@ class StatsScreen extends StatelessWidget {
           style: TextStyle(color: scheme.onSurface.withValues(alpha: 0.6)),
         ),
         const SizedBox(height: 16),
+        const _Panel(title: 'Goodreads sync', child: _GoodreadsPanel()),
         _Panel(title: 'Finished each month, $year', child: _MonthBars(months: months)),
         _Panel(
           title: 'How you rated them',
@@ -138,6 +139,108 @@ class StatsScreen extends StatelessWidget {
         SnackBar(content: Text('Updated $updated books, added $added new')),
       );
     }
+  }
+}
+
+class _GoodreadsPanel extends StatefulWidget {
+  const _GoodreadsPanel();
+  @override
+  State<_GoodreadsPanel> createState() => _GoodreadsPanelState();
+}
+
+class _GoodreadsPanelState extends State<_GoodreadsPanel> {
+  final _link = TextEditingController();
+
+  @override
+  void dispose() {
+    _link.dispose();
+    super.dispose();
+  }
+
+  String _ago(DateTime d) {
+    final m = DateTime.now().difference(d).inMinutes;
+    if (m < 1) return 'just now';
+    if (m < 60) return '$m min ago';
+    if (m < 60 * 24) return '${m ~/ 60} h ago';
+    return Book.dateLabel(d);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final store = context.watch<LibraryStore>();
+    final muted = Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6);
+    if (!store.grConnected) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Paste your Goodreads profile link. The app then brings in your shelves, ratings, '
+            'finish dates and reviews every time you open it.',
+            style: TextStyle(color: muted, fontSize: 13.5),
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: _link,
+            decoration: const InputDecoration(hintText: 'goodreads.com/user/show/12345678-kosha'),
+          ),
+          const SizedBox(height: 10),
+          FilledButton.icon(
+            icon: const Icon(Icons.link_rounded),
+            label: const Text('Connect & sync'),
+            onPressed: () async {
+              final err = store.connectGoodreads(_link.text);
+              if (err != null) {
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
+                return;
+              }
+              final msg = await store.syncGoodreads();
+              if (msg != null && context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+              }
+            },
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Find it in the Goodreads app: Profile → ⋮ → Share profile → Copy link.',
+            style: TextStyle(color: muted, fontSize: 12.5),
+          ),
+        ],
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Connected to Goodreads profile ${store.grUser}', style: const TextStyle(fontWeight: FontWeight.w700)),
+        const SizedBox(height: 4),
+        Text(
+          store.syncing
+              ? 'Syncing…'
+              : store.grLastSync == null
+                  ? 'Not synced yet'
+                  : 'Last synced ${_ago(store.grLastSync!)}. Syncs automatically when you open the app, or pull down on the shelf.',
+          style: TextStyle(color: muted, fontSize: 13),
+        ),
+        if (store.syncMessage.isNotEmpty && !store.syncing) ...[
+          const SizedBox(height: 6),
+          Text(store.syncMessage, style: TextStyle(color: muted, fontSize: 13)),
+        ],
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            FilledButton.icon(
+              icon: store.syncing
+                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.sync_rounded),
+              label: const Text('Sync now'),
+              onPressed: store.syncing ? null : () => store.syncGoodreads(),
+            ),
+            TextButton(onPressed: store.disconnectGoodreads, child: const Text('Disconnect')),
+          ],
+        ),
+      ],
+    );
   }
 }
 

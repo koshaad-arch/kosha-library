@@ -6,6 +6,7 @@ import 'package:flutter/services.dart' show rootBundle;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/book.dart';
+import 'goodreads_sync.dart';
 
 enum SortBy { title, author, rating, finished, shortest, recentlyAdded }
 
@@ -26,10 +27,21 @@ class LibraryStore extends ChangeNotifier {
   static const _kBooks = 'library_v1';
   static const _kGoal = 'goal_v1';
   static const _kCovers = 'covers_v1';
+  static const _kGrUser = 'gr_user_v1';
+  static const _kGrKey = 'gr_key_v1';
+  static const _kGrLast = 'gr_last_v1';
 
   final List<Book> _books = [];
   int goal = 24;
   bool showCovers = true;
+
+  // Goodreads sync
+  String grUser = '';
+  String grKey = '';
+  DateTime? grLastSync;
+  bool syncing = false;
+  String syncMessage = '';
+  bool get grConnected => grUser.isNotEmpty;
   bool loaded = false;
 
   // UI filter state
@@ -57,6 +69,10 @@ class LibraryStore extends ChangeNotifier {
     }
     goal = prefs.getInt(_kGoal) ?? 24;
     showCovers = prefs.getBool(_kCovers) ?? true;
+    grUser = prefs.getString(_kGrUser) ?? '';
+    grKey = prefs.getString(_kGrKey) ?? '';
+    final last = prefs.getString(_kGrLast);
+    grLastSync = last == null ? null : DateTime.tryParse(last);
     loaded = true;
     notifyListeners();
   }
@@ -71,6 +87,9 @@ class LibraryStore extends ChangeNotifier {
     await prefs.setString(_kBooks, Book.encodeList(_books));
     await prefs.setInt(_kGoal, goal);
     await prefs.setBool(_kCovers, showCovers);
+    await prefs.setString(_kGrUser, grUser);
+    await prefs.setString(_kGrKey, grKey);
+    if (grLastSync != null) await prefs.setString(_kGrLast, grLastSync!.toIso8601String());
   }
 
   Book? byId(String id) {
@@ -136,6 +155,102 @@ class LibraryStore extends ChangeNotifier {
     goal = g;
     _scheduleSave();
     notifyListeners();
+  }
+
+  /// Connects a Goodreads account from a profile/shelf/RSS link. Returns an error message or null.
+  String? connectGoodreads(String input) {
+    final acc = GoodreadsSync.parse(input);
+    if (acc == null) return 'That doesn\'t look like a Goodreads profile link.';
+    grUser = acc.userId;
+    grKey = acc.key;
+    grLastSync = null;
+    _scheduleSave();
+    notifyListeners();
+    return null;
+  }
+
+  void disconnectGoodreads() {
+    grUser = '';
+    grKey = '';
+    grLastSync = null;
+    syncMessage = '';
+    _scheduleSave();
+    notifyListeners();
+  }
+
+  /// Syncs if connected and the last sync is older than [maxAge] (or always when maxAge is null).
+  Future<String?> syncGoodreads({Duration? maxAge}) async {
+    if (!grConnected || syncing) return null;
+    if (maxAge != null && grLastSync != null && DateTime.now().difference(grLastSync!) < maxAge) return null;
+    syncing = true;
+    syncMessage = 'Syncing with Goodreads…';
+    notifyListeners();
+    try {
+      final items = await GoodreadsSync.fetchAll(GoodreadsAccount(grUser, grKey));
+      var added = 0, updated = 0;
+      final byGr = <String, Book>{};
+      final byIsbn = <String, Book>{};
+      final byKey = <String, Book>{};
+      for (final b in _books) {
+        if (b.goodreadsId.isNotEmpty) byGr[b.goodreadsId] = b;
+        if (b.isbn.isNotEmpty) byIsbn[isbn13(b.isbn)] = b;
+        byKey[GoodreadsSync.matchKey(b.title, b.author)] = b;
+      }
+      for (final g in items) {
+        if (g.title.isEmpty) continue;
+        var b = byGr[g.grId] ??
+            (g.isbn.isNotEmpty ? byIsbn[isbn13(g.isbn)] : null) ??
+            byKey[GoodreadsSync.matchKey(g.title, g.author)];
+        if (b == null) {
+          final t = g.title;
+          final cut = t.indexOf(RegExp(r' \(|: '));
+          b = Book(
+            id: 'g${g.grId}',
+            title: cut > 2 ? t.substring(0, cut) : t,
+            subtitle: cut > 2 ? t.substring(cut).replaceAll(RegExp(r'^[ :(]+|\)$'), '') : '',
+            author: g.author,
+            isbn: g.isbn,
+            pages: g.pages,
+            year: g.year,
+            summary: g.description,
+            coverUrl: g.imageUrl,
+            added: g.addedAt,
+          );
+          _books.add(b);
+          byGr[g.grId] = b;
+          added++;
+          b.grSig = '';
+        }
+        b.goodreadsId = g.grId;
+        if (b.isbn.isEmpty && g.isbn.isNotEmpty) b.isbn = g.isbn;
+        if (b.pages == null && g.pages != null) b.pages = g.pages;
+        if (b.coverUrl.isEmpty && g.imageUrl.isNotEmpty) b.coverUrl = g.imageUrl;
+        if (b.summary.isEmpty && g.description.isNotEmpty) b.summary = g.description;
+        if (b.grSig == g.signature) continue; // nothing changed on Goodreads since last time
+        final wasNew = b.grSig.isEmpty && added > 0 && b.id == 'g${g.grId}';
+        b.status = g.status;
+        if (g.rating > 0) b.rating = g.rating;
+        if (g.readAt != null) b.end = g.readAt;
+        if (g.status == ReadStatus.reading) b.start ??= g.addedAt;
+        if (g.status == ReadStatus.read && b.pages != null) b.currentPage = b.pages!;
+        if (g.review.isNotEmpty) b.review = g.review;
+        b.grSig = g.signature;
+        if (!wasNew) updated++;
+      }
+      grLastSync = DateTime.now();
+      syncMessage = 'Synced with Goodreads: ${items.length} books checked, $added new, $updated updated.';
+      return syncMessage;
+    } on GoodreadsException catch (e) {
+      syncMessage = e.message;
+      return syncMessage;
+    } catch (_) {
+      syncMessage = 'Couldn\'t reach Goodreads. Check your internet and try again.';
+      return syncMessage;
+    } finally {
+      syncing = false;
+      _scheduleSave();
+      notifyListeners();
+    }
   }
 
   void setShowCovers(bool v) {

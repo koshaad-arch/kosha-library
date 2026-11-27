@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../models/book.dart';
+import '../services/goodreads_sync.dart';
 import '../services/library_store.dart';
 import '../theme.dart';
 import '../widgets/book_cover.dart';
@@ -35,6 +37,13 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
     _page.dispose();
     _pages.dispose();
     super.dispose();
+  }
+
+  Future<void> _open(String url) async {
+    final ok = await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+    if (!ok && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Couldn\'t open the link.')));
+    }
   }
 
   Future<void> _pickDate(LibraryStore store, Book b, bool isStart) async {
@@ -136,6 +145,26 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
                     if (b.isbn.isNotEmpty)
                       Text('ISBN ${b.isbn}', style: TextStyle(color: muted, fontSize: 12)),
                   ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  icon: const Icon(Icons.shopping_bag_outlined, size: 18),
+                  label: const Text('Amazon'),
+                  onPressed: () => _open(GoodreadsSync.amazonUrl(b)),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton.icon(
+                  icon: const Icon(Icons.menu_book_outlined, size: 18),
+                  label: const Text('Goodreads'),
+                  onPressed: () => _open(GoodreadsSync.goodreadsUrl(b)),
                 ),
               ),
             ],

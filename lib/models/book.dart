@@ -50,6 +50,8 @@ class Book {
   int currentPage;
   String coverUrl;
   DateTime added;
+  String goodreadsId;
+  String grSig;
 
   Book({
     required this.id,
@@ -74,6 +76,8 @@ class Book {
     this.currentPage = 0,
     this.coverUrl = '',
     DateTime? added,
+    this.goodreadsId = '',
+    this.grSig = '',
   })  : moods = moods ?? [],
         added = added ?? DateTime.now();
 
@@ -112,6 +116,8 @@ class Book {
         currentPage: (j['currentPage'] ?? 0) as int,
         coverUrl: (j['coverUrl'] ?? '') as String,
         added: _d(j['added']),
+        goodreadsId: (j['goodreadsId'] ?? '').toString(),
+        grSig: (j['grSig'] ?? '') as String,
       );
 
   Map<String, dynamic> toJson() => {
@@ -137,6 +143,8 @@ class Book {
         'currentPage': currentPage,
         'coverUrl': coverUrl,
         'added': _ds(added),
+        'goodreadsId': goodreadsId,
+        'grSig': grSig,
       };
 
   static String encodeList(List<Book> books) =>
