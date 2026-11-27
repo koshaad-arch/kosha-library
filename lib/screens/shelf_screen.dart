@@ -31,10 +31,30 @@ class ShelfScreen extends StatelessWidget {
         SliverPadding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
           sliver: SliverToBoxAdapter(
-            child: Text(
-              '${books.length} ${books.length == 1 ? 'book' : 'books'}',
-              style: const TextStyle(color: AppColors.mute),
-            ),
+            child: Builder(builder: (context) {
+              final filtered = store.statusFilter != 'all' || store.query.isNotEmpty || store.genreFilter.isNotEmpty;
+              final what = [
+                if (store.statusFilter != 'all') LibraryStore.filterNames[store.statusFilter] ?? '',
+                store.genreFilter,
+                if (store.query.isNotEmpty) '“${store.query}”',
+              ].where((x) => x.isNotEmpty).join(' · ');
+              return Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '${books.length} ${books.length == 1 ? 'book' : 'books'}${filtered ? ' · $what' : ' on your shelf'}',
+                      style: const TextStyle(color: AppColors.mute),
+                    ),
+                  ),
+                  if (filtered)
+                    TextButton.icon(
+                      onPressed: store.clearFilters,
+                      icon: const Icon(Icons.close, size: 16),
+                      label: const Text('Show all'),
+                    ),
+                ],
+              );
+            }),
           ),
         ),
         if (books.isEmpty)
@@ -53,7 +73,7 @@ class ShelfScreen extends StatelessWidget {
                 crossAxisCount: cols,
                 mainAxisSpacing: 18,
                 crossAxisSpacing: 14,
-                childAspectRatio: 0.44,
+                childAspectRatio: 0.42,
               ),
               delegate: SliverChildBuilderDelegate(
                 (c, i) => _BookTile(book: books[i], showReal: store.showCovers),
@@ -88,14 +108,7 @@ class _Header extends StatelessWidget {
         children: [
           Text("Kosha's Library", style: serif(34, color: onPlum)),
           const SizedBox(height: 14),
-          Row(
-            children: [
-              _stat('${store.books.length}', 'owned'),
-              _stat('${store.read.length}', 'read'),
-              _stat('${store.count('tbr')}', 'to read'),
-              _stat(_k(store.pagesRead), 'pages'),
-            ],
-          ),
+          _Tiles(store: store),
           const SizedBox(height: 12),
           Container(
             padding: const EdgeInsets.all(14),
@@ -127,11 +140,34 @@ class _Header extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('$done of ${store.goal} books in $year', style: serif(18, color: onPlum)),
+                      Wrap(
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: 6,
+                        children: [
+                          Text('$done of ${store.goal} books in $year', style: serif(18, color: onPlum)),
+                          if (done < store.goal) _PacePill(done: done, goal: store.goal),
+                        ],
+                      ),
                       const SizedBox(height: 2),
                       Text(
-                        done >= store.goal ? 'Goal reached — wonderful!' : '${store.goal - done} to go',
+                        done >= store.goal ? 'Goal reached — wonderful!' : '${store.goal - done} to go · about ${_perMonth(done, store.goal)} a month to finish on time',
                         style: const TextStyle(color: soft),
+                      ),
+                      Wrap(
+                        spacing: 4,
+                        children: [
+                          TextButton(
+                            style: TextButton.styleFrom(foregroundColor: AppColors.gold, padding: EdgeInsets.zero, minimumSize: const Size(0, 36)),
+                            onPressed: () => store.goTo('readyr'),
+                            child: Text("See $year's books"),
+                          ),
+                          const SizedBox(width: 8),
+                          TextButton(
+                            style: TextButton.styleFrom(foregroundColor: AppColors.gold, padding: EdgeInsets.zero, minimumSize: const Size(0, 36)),
+                            onPressed: () => store.goTo('year'),
+                            child: Text('$year stats'),
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -165,25 +201,11 @@ class _Header extends StatelessWidget {
     );
   }
 
-  static String _k(int n) => n >= 10000 ? '${(n / 1000).toStringAsFixed(1)}k' : '$n';
-
-  Widget _stat(String n, String l) => Expanded(
-        child: Container(
-          margin: const EdgeInsets.only(right: 8),
-          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 10),
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.08),
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              FittedBox(child: Text(n, style: serif(22, color: const Color(0xFFFBEEF2)))),
-              Text(l, style: const TextStyle(color: Color(0xFFE2C6D3), fontSize: 12)),
-            ],
-          ),
-        ),
-      );
+  static int _perMonth(int done, int goal) {
+    final now = DateTime.now();
+    final monthsLeft = (12 - now.month - now.day / 31).clamp(1, 12);
+    return ((goal - done) / monthsLeft).ceil().clamp(1, 1000).toInt();
+  }
 
   Future<void> _editGoal(BuildContext context, LibraryStore store) async {
     final ctrl = TextEditingController(text: '${store.goal}');
@@ -284,10 +306,14 @@ class _BookTile extends StatelessWidget {
             Text(book.firstAuthor, maxLines: 1, overflow: TextOverflow.ellipsis,
                 style: TextStyle(color: muted, fontSize: 12.5)),
             const SizedBox(height: 4),
-            Row(
+            Wrap(
+              spacing: 4,
+              runSpacing: 4,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 StatusPill(status: book.status),
-                const Spacer(),
+                if (book.isWish) const _MiniPill('🛒 To buy', Color(0xFFFFE0C2), Color(0xFF7A3D00)),
+                if (book.own == 'none') const _MiniPill('Not owned', Color(0xFFE9E2E6), Color(0xFF5A4A53)),
                 if (book.rating > 0) Stars(rating: book.rating, size: 12),
               ],
             ),
@@ -363,6 +389,8 @@ class _FilterBarState extends State<_FilterBar> {
       ('read', 'Read'),
       ('dnf', 'DNF'),
       ('fav', '♥ Favourites'),
+      ('own', '📚 Owned'),
+      ('wish', '🛒 Wishlist'),
     ];
     return Material(
       color: Theme.of(context).scaffoldBackgroundColor,
@@ -437,6 +465,117 @@ class _FilterBarState extends State<_FilterBar> {
           ],
         ),
       ),
+    );
+  }
+}
+
+
+class _MiniPill extends StatelessWidget {
+  final String text;
+  final Color bg, fg;
+  const _MiniPill(this.text, this.bg, this.fg);
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+        decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(99)),
+        child: Text(text, style: TextStyle(color: fg, fontSize: 11, fontWeight: FontWeight.w700)),
+      );
+}
+
+class _PacePill extends StatelessWidget {
+  final int done, goal;
+  const _PacePill({required this.done, required this.goal});
+  @override
+  Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final doy = now.difference(DateTime(now.year, 1, 1)).inDays + 1;
+    final pace = done - (goal * doy / 365).floor();
+    final on = pace >= 0;
+    return _MiniPill(on ? 'on track' : '${-pace} behind', on ? const Color(0xFFD9EFE0) : const Color(0xFFFFE6B3),
+        on ? const Color(0xFF1F5A35) : const Color(0xFF6B4300));
+  }
+}
+
+/// The six tappable summary tiles from the web tracker.
+class _Tiles extends StatelessWidget {
+  final LibraryStore store;
+  const _Tiles({required this.store});
+
+  @override
+  Widget build(BuildContext context) {
+    final year = DateTime.now().year;
+    final all = store.books;
+    final read = store.read;
+    final yr = store.readInYear(year);
+    final owned = all.where((b) => b.isOwned).toList();
+    final ownRead = owned.where((b) => b.status == ReadStatus.read).length;
+    final pctR = owned.isEmpty ? 0 : (ownRead / owned.length * 100).round();
+    final ownUnread = owned.where((b) => b.status == ReadStatus.tbr).length;
+    final reading = store.reading;
+    final wish = store.wishlist;
+    final wTot = wish.fold<int>(0, (s, b) => s + (b.price ?? 0));
+    final rated = read.where((b) => b.rating > 0).toList();
+    final avg = rated.isEmpty ? '' : ' · avg ${(rated.fold<double>(0, (s, b) => s + b.rating) / rated.length).toStringAsFixed(1)} ★';
+    final pYr = yr.fold<int>(0, (s, b) => s + (b.pages ?? 0));
+    String n(int x) => x.toString().replaceAllMapped(RegExp(r'(\d)(?=(\d\d)+\d$)'), (m) => '${m[1]},');
+    final tiles = [
+      ('own', '📚', '${owned.length}', 'books owned', '$pctR% of them read', pctR / 100.0),
+      ('read', '✅', '${read.length}', 'books read', '${yr.length} in $year$avg', null),
+      ('reading', '📖', '${reading.length}', 'reading now', reading.isEmpty ? 'nothing open' : reading.first.title + (reading.length > 1 ? ' +${reading.length - 1}' : ''), null),
+      ('ownunread', '⏳', '$ownUnread', 'owned, not read', ownUnread > 0 ? 'your to-read pile' : 'all caught up!', null),
+      ('wish', '🛒', '${wish.length}', 'on the wishlist', wTot > 0 ? '₹${n(wTot)} total' : 'books to buy', null),
+      ('pages', '📄', n(store.pagesRead), 'pages read', '${n(pYr)} in $year', null),
+    ];
+    final cols = MediaQuery.sizeOf(context).width > 700 ? 6 : 3;
+    return GridView.count(
+      crossAxisCount: cols,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      mainAxisSpacing: 8,
+      crossAxisSpacing: 8,
+      childAspectRatio: cols == 6 ? 1.1 : 0.92,
+      children: tiles.map((t) {
+        final on = store.statusFilter == t.$1;
+        return Material(
+          color: on ? const Color(0x2EF0AC2E) : Colors.white.withValues(alpha: 0.08),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+            side: BorderSide(color: on ? AppColors.gold : Colors.white.withValues(alpha: 0.08)),
+          ),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(14),
+            onTap: () => store.goTo(t.$1),
+            child: Padding(
+              padding: const EdgeInsets.all(10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(t.$2, style: const TextStyle(fontSize: 15)),
+                  FittedBox(child: Text(t.$3, style: serif(22, color: const Color(0xFFFBEEF2)))),
+                  Text(t.$4, maxLines: 1, overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: Color(0xFFF1DBE5), fontSize: 12, fontWeight: FontWeight.w700)),
+                  const Spacer(),
+                  Text(t.$5, maxLines: 2, overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: Color(0xFFD6B7C6), fontSize: 11, height: 1.2)),
+                  if (t.$6 != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(4),
+                        child: LinearProgressIndicator(
+                          value: t.$6,
+                          minHeight: 4,
+                          backgroundColor: Colors.white.withValues(alpha: 0.14),
+                          color: AppColors.gold,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        );
+      }).toList(),
     );
   }
 }

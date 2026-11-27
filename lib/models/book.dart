@@ -27,6 +27,10 @@ const kMoods = [
 
 const kFormats = ['Paperback', 'Hardcover', 'Kindle', 'Audiobook'];
 
+/// own = on your shelf · wish = need to buy · none = read/borrowed, not owned
+const kOwnLabels = {'own': '📚 Own it', 'wish': '🛒 Need to buy', 'none': "📖 Don't own"};
+const kPriorities = ['High', 'Medium', 'Low'];
+
 class Book {
   String id;
   String title;
@@ -52,6 +56,10 @@ class Book {
   DateTime added;
   String goodreadsId;
   String grSig;
+  String own; // own | wish | none
+  int? price; // ₹, for wishlist books
+  String prio; // High | Medium | Low
+  String amz; // custom Amazon product link
 
   Book({
     required this.id,
@@ -78,6 +86,10 @@ class Book {
     DateTime? added,
     this.goodreadsId = '',
     this.grSig = '',
+    this.own = 'own',
+    this.price,
+    this.prio = '',
+    this.amz = '',
   })  : moods = moods ?? [],
         added = added ?? DateTime.now();
 
@@ -85,6 +97,28 @@ class Book {
       (pages == null || pages == 0) ? 0 : (currentPage / pages!).clamp(0, 1).toDouble();
 
   String get firstAuthor => author.split(',').first.trim();
+
+  bool get isOwned => own == 'own';
+  bool get isWish => own == 'wish';
+
+  /// Exact Amazon.in product page when we know the ISBN, otherwise a book search.
+  String get amazonLink {
+    if (amz.startsWith('https://')) return amz;
+    final i = isbn.replaceAll(RegExp(r'[^0-9Xx]'), '').toUpperCase();
+    if (i.length == 10) return 'https://www.amazon.in/dp/$i';
+    if (i.length == 13 && i.startsWith('978')) return 'https://www.amazon.in/dp/${isbn13to10(i)}';
+    return 'https://www.amazon.in/s?k=${Uri.encodeQueryComponent('$title $firstAuthor'.trim())}&i=stripbooks';
+  }
+
+  static String isbn13to10(String i) {
+    final c = i.substring(3, 12);
+    var s = 0;
+    for (var k = 0; k < 9; k++) {
+      s += (10 - k) * int.parse(c[k]);
+    }
+    final r = (11 - s % 11) % 11;
+    return '$c${r == 10 ? 'X' : r}';
+  }
 
   static DateTime? _d(dynamic v) =>
       (v is String && v.isNotEmpty) ? DateTime.tryParse(v) : null;
@@ -118,6 +152,10 @@ class Book {
         added: _d(j['added']),
         goodreadsId: (j['goodreadsId'] ?? '').toString(),
         grSig: (j['grSig'] ?? '') as String,
+        own: (j['own'] ?? 'own') as String,
+        price: (j['price'] as num?)?.toInt(),
+        prio: (j['prio'] ?? '') as String,
+        amz: (j['amz'] ?? '') as String,
       );
 
   Map<String, dynamic> toJson() => {
@@ -145,6 +183,10 @@ class Book {
         'added': _ds(added),
         'goodreadsId': goodreadsId,
         'grSig': grSig,
+        'own': own,
+        'price': price,
+        'prio': prio,
+        'amz': amz,
       };
 
   static String encodeList(List<Book> books) =>

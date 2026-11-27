@@ -22,7 +22,7 @@ class FoundBook {
     this.pages,
   });
 
-  Book toBook(ReadStatus status) {
+  Book toBook(ReadStatus status, {String own = 'own'}) {
     final now = DateTime.now();
     return Book(
       id: 'u${now.microsecondsSinceEpoch}',
@@ -40,6 +40,7 @@ class FoundBook {
       start: status == ReadStatus.reading ? now : null,
       end: status == ReadStatus.read ? now : null,
       currentPage: status == ReadStatus.read ? (pages ?? 0) : 0,
+      own: own,
     );
   }
 }

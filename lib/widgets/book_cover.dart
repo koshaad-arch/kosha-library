@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../models/book.dart';
+import '../services/cover_service.dart';
 
 const _palette = [
   [Color(0xFF7B2D4F), Color(0xFFFBE3EA)],
@@ -30,34 +31,33 @@ int _hash(String s) {
 
 /// Shows the real cover (from the lookup, or Open Library by ISBN) and falls
 /// back to a designed cover while loading or when none exists.
+/// Shows the real cover (your own link, or one found online) and falls back to a
+/// designed cover while loading or when none exists.
 class BookCover extends StatelessWidget {
   final Book book;
   final double width;
   final bool showReal;
   const BookCover({super.key, required this.book, this.width = 120, this.showReal = true});
 
-  String get _url {
-    if (book.coverUrl.isNotEmpty) return book.coverUrl;
-    if (book.isbn.isNotEmpty) {
-      return 'https://covers.openlibrary.org/b/isbn/${book.isbn}-M.jpg?default=false';
-    }
-    return '';
-  }
-
   @override
   Widget build(BuildContext context) {
     final designed = DesignedCover(title: book.title, author: book.firstAuthor, width: width);
-    final url = showReal ? _url : '';
-    Widget child = url.isEmpty
-        ? designed
-        : Image.network(
-            url,
-            width: width,
-            height: width * 1.5,
-            fit: BoxFit.cover,
-            loadingBuilder: (c, w, p) => p == null ? w : designed,
-            errorBuilder: (c, e, s) => designed,
-          );
+    Widget child = designed;
+    if (showReal) {
+      child = ValueListenableBuilder<String?>(
+        valueListenable: CoverService.instance.coverFor(book),
+        builder: (context, url, _) => (url == null || url.isEmpty)
+            ? designed
+            : Image.network(
+                url,
+                width: width,
+                height: width * 1.5,
+                fit: BoxFit.cover,
+                loadingBuilder: (c, w, p) => p == null ? w : designed,
+                errorBuilder: (c, e, s) => designed,
+              ),
+      );
+    }
     return Container(
       width: width,
       height: width * 1.5,
@@ -81,7 +81,6 @@ class BookCover extends StatelessWidget {
         fit: StackFit.expand,
         children: [
           child,
-          // spine shading
           Positioned(
             left: 0,
             top: 0,

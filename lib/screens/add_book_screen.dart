@@ -12,7 +12,8 @@ import 'scan_screen.dart';
 /// Add a book by scanning its barcode, typing an ISBN, searching by title, or by hand.
 class AddBookScreen extends StatefulWidget {
   final bool startScanning;
-  const AddBookScreen({super.key, this.startScanning = false});
+  final String defaultOwn;
+  const AddBookScreen({super.key, this.startScanning = false, this.defaultOwn = 'own'});
 
   @override
   State<AddBookScreen> createState() => _AddBookScreenState();
@@ -23,6 +24,7 @@ class _AddBookScreenState extends State<AddBookScreen> {
   List<FoundBook> _results = [];
   bool _loading = false;
   String _message = '';
+  late String _own = widget.defaultOwn;
 
   @override
   void initState() {
@@ -79,8 +81,17 @@ class _AddBookScreenState extends State<AddBookScreen> {
   }
 
   void _alreadyOwned(Book b) {
+    final store = context.read<LibraryStore>();
+    if (!b.isOwned && _own == 'own') {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('“${b.title}” is already here — ${b.isWish ? 'on your wishlist' : 'marked “Don’t own”'}.'),
+        action: SnackBarAction(label: 'I own it now', onPressed: () => store.setOwn(b, 'own')),
+        duration: const Duration(seconds: 6),
+      ));
+      return;
+    }
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text('“${b.title}” is already on your shelf'),
+      content: Text('“${b.title}” is already in your library${b.isOwned ? ' (owned)' : b.isWish ? ' (wishlist)' : ''}'),
       action: SnackBarAction(
         label: 'Open',
         onPressed: () => Navigator.pushReplacement(
@@ -100,9 +111,10 @@ class _AddBookScreenState extends State<AddBookScreen> {
         return;
       }
     }
-    final b = f.toBook(status);
+    final b = f.toBook(status, own: _own);
     store.add(b);
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Added “${b.title}” to your shelf')));
+    if (f.coverUrl.isEmpty) b.coverUrl = '';
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(_own == 'wish' ? 'Added “${b.title}” to your wishlist' : 'Added “${b.title}” to your shelf')));
     Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => BookDetailScreen(bookId: b.id)));
   }
 
@@ -173,7 +185,20 @@ class _AddBookScreenState extends State<AddBookScreen> {
               ),
             ),
           ),
-          const SizedBox(height: 22),
+          const SizedBox(height: 14),
+          Text('Adding as', style: TextStyle(color: muted)),
+          const SizedBox(height: 6),
+          SegmentedButton<String>(
+            segments: const [
+              ButtonSegment(value: 'own', label: Text('📚 Own it')),
+              ButtonSegment(value: 'wish', label: Text('🛒 Need to buy')),
+              ButtonSegment(value: 'none', label: Text("📖 Don't own")),
+            ],
+            selected: {_own},
+            showSelectedIcon: false,
+            onSelectionChanged: (s) => setState(() => _own = s.first),
+          ),
+          const SizedBox(height: 18),
           Text('…or type an ISBN or a title', style: TextStyle(color: muted)),
           const SizedBox(height: 8),
           Row(

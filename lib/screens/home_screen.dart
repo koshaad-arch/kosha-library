@@ -5,45 +5,54 @@ import '../services/library_store.dart';
 import 'add_book_screen.dart';
 import 'shelf_screen.dart';
 import 'stats_screen.dart';
+import 'wishlist_screen.dart';
 
-class HomeScreen extends StatefulWidget {
+class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
-  @override
-  State<HomeScreen> createState() => _HomeScreenState();
-}
 
-class _HomeScreenState extends State<HomeScreen> {
-  int _tab = 0;
   @override
   Widget build(BuildContext context) {
-    final loaded = context.select<LibraryStore, bool>((s) => s.loaded);
-    if (!loaded) {
+    final store = context.watch<LibraryStore>();
+    if (!store.loaded) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
     return Scaffold(
       body: SafeArea(
         bottom: false,
         child: IndexedStack(
-          index: _tab,
-          children: const [ShelfScreen(), StatsScreen()],
+          index: store.tab,
+          children: const [ShelfScreen(), WishlistScreen(), StatsScreen()],
         ),
       ),
-      floatingActionButton: _tab == 0
-          ? FloatingActionButton.extended(
+      floatingActionButton: store.tab == 2
+          ? null
+          : FloatingActionButton.extended(
               onPressed: () => Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => const AddBookScreen(startScanning: true)),
+                MaterialPageRoute(
+                  builder: (_) => AddBookScreen(startScanning: true, defaultOwn: store.tab == 1 ? 'wish' : 'own'),
+                ),
               ),
               icon: const Icon(Icons.qr_code_scanner_rounded),
               label: const Text('Scan / add'),
-            )
-          : null,
+            ),
       bottomNavigationBar: NavigationBar(
-        selectedIndex: _tab,
-        onDestinationSelected: (i) => setState(() => _tab = i),
-        destinations: const [
-          NavigationDestination(icon: Icon(Icons.auto_stories_outlined), selectedIcon: Icon(Icons.auto_stories), label: 'Shelf'),
-          NavigationDestination(icon: Icon(Icons.insights_outlined), selectedIcon: Icon(Icons.insights), label: 'Stats'),
+        selectedIndex: store.tab,
+        onDestinationSelected: store.setTab,
+        destinations: [
+          const NavigationDestination(
+              icon: Icon(Icons.auto_stories_outlined), selectedIcon: Icon(Icons.auto_stories), label: 'Shelf'),
+          NavigationDestination(
+            icon: Badge(
+              isLabelVisible: store.wishlist.isNotEmpty,
+              label: Text('${store.wishlist.length}'),
+              child: const Icon(Icons.shopping_bag_outlined),
+            ),
+            selectedIcon: const Icon(Icons.shopping_bag),
+            label: 'Wishlist',
+          ),
+          const NavigationDestination(
+              icon: Icon(Icons.insights_outlined), selectedIcon: Icon(Icons.insights), label: 'Stats'),
         ],
       ),
     );

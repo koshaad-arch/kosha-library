@@ -8,6 +8,7 @@ import '../services/library_store.dart';
 import '../theme.dart';
 import '../widgets/book_cover.dart';
 import '../widgets/star_rating.dart';
+import 'wishlist_screen.dart' show AmazonButton;
 
 class BookDetailScreen extends StatefulWidget {
   final String bookId;
@@ -18,7 +19,7 @@ class BookDetailScreen extends StatefulWidget {
 }
 
 class _BookDetailScreenState extends State<BookDetailScreen> {
-  late final TextEditingController _review, _quote, _page, _pages;
+  late final TextEditingController _review, _quote, _page, _pages, _price, _amz, _cover;
 
   @override
   void initState() {
@@ -28,6 +29,9 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
     _quote = TextEditingController(text: b?.quote ?? '');
     _page = TextEditingController(text: (b?.currentPage ?? 0) == 0 ? '' : '${b!.currentPage}');
     _pages = TextEditingController(text: b?.pages?.toString() ?? '');
+    _price = TextEditingController(text: b?.price?.toString() ?? '');
+    _amz = TextEditingController(text: b?.amz ?? '');
+    _cover = TextEditingController(text: b?.coverUrl ?? '');
   }
 
   @override
@@ -36,6 +40,9 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
     _quote.dispose();
     _page.dispose();
     _pages.dispose();
+    _price.dispose();
+    _amz.dispose();
+    _cover.dispose();
     super.dispose();
   }
 
@@ -152,13 +159,7 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
           const SizedBox(height: 14),
           Row(
             children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  icon: const Icon(Icons.shopping_bag_outlined, size: 18),
-                  label: const Text('Amazon'),
-                  onPressed: () => _open(GoodreadsSync.amazonUrl(b)),
-                ),
-              ),
+              Expanded(child: AmazonButton(url: b.amazonLink, label: 'Buy on Amazon.in ↗')),
               const SizedBox(width: 8),
               Expanded(
                 child: OutlinedButton.icon(
@@ -190,6 +191,55 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
                     );
             }).toList(),
           ),
+          label('Do you own it?'),
+          SegmentedButton<String>(
+            segments: kOwnLabels.entries
+                .map((e) => ButtonSegment(value: e.key, label: Text(e.value, style: const TextStyle(fontSize: 12.5))))
+                .toList(),
+            selected: {b.own},
+            showSelectedIcon: false,
+            onSelectionChanged: (s) => store.setOwn(b, s.first),
+          ),
+          if (b.isWish) ...[
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _price,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(labelText: 'Price (₹)', hintText: 'e.g. 399'),
+                    onChanged: (v) {
+                      b.price = int.tryParse(v);
+                      store.touch(b);
+                    },
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    value: kPriorities.contains(b.prio) ? b.prio : null,
+                    decoration: const InputDecoration(labelText: 'Priority'),
+                    items: kPriorities.map((x) => DropdownMenuItem(value: x, child: Text(x))).toList(),
+                    onChanged: (v) {
+                      b.prio = v ?? '';
+                      store.touch(b);
+                    },
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(foregroundColor: const Color(0xFF1F5A35)),
+              icon: const Icon(Icons.check),
+              label: const Text('I bought it'),
+              onPressed: () {
+                store.setOwn(b, 'own');
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Moved to your shelf — enjoy!')));
+              },
+            ),
+          ],
           label('Your rating'),
           Row(
             children: [
@@ -325,6 +375,31 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
               },
             ),
           ],
+          const SizedBox(height: 10),
+          TextField(
+            controller: _amz,
+            keyboardType: TextInputType.url,
+            decoration: const InputDecoration(
+                labelText: 'Amazon link (optional)', hintText: 'Paste the exact product page'),
+            onChanged: (v) {
+              b.amz = v.trim();
+              store.touch(b);
+            },
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: _cover,
+            keyboardType: TextInputType.url,
+            decoration: const InputDecoration(
+                labelText: 'Cover image link (optional)', hintText: 'https://… to use your own cover'),
+            onChanged: (v) {
+              final t = v.trim();
+              if (t.isEmpty || t.startsWith('https://')) {
+                b.coverUrl = t;
+                store.touch(b);
+              }
+            },
+          ),
           label('Mood'),
           Wrap(
             spacing: 6,
