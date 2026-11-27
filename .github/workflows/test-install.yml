@@ -22,18 +22,19 @@ jobs:
           arch: x86_64
           target: google_apis
           disable-animations: true
+          profile: pixel_6
           script: |
             adb install -r app.apk
             adb shell monkey -p com.koshagandhi.kosha_library -c android.intent.category.LAUNCHER 1
             sleep 25
             adb exec-out screencap -p > shot1-shelf.png
-            adb shell input swipe 540 1600 540 500 400
+            adb shell input swipe 540 1900 540 500 400
             sleep 3
             adb exec-out screencap -p > shot2-scrolled.png
-            adb shell input tap 540 2280
+            adb shell input tap 540 2310
             sleep 6
             adb exec-out screencap -p > shot3-wishlist.png
-            adb shell input tap 900 2280
+            adb shell input tap 900 2310
             sleep 6
             adb exec-out screencap -p > shot4-stats.png
             adb logcat -d | grep -iE "FATAL|flutter.*(error|exception)|E/flutter" | tail -80 > emu.log || true
