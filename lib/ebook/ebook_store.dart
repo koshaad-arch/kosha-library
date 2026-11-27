@@ -229,35 +229,124 @@ class EbookStore extends ChangeNotifier {
   }
 
   // ---------- free classics (Project Gutenberg) ----------
-  static Future<List<FreeBook>> searchFree(String q) async {
-    final uri = Uri.https('gutendex.com', '/books/', {
-      if (q.trim().isNotEmpty) 'search': q.trim(),
-      'mime_type': 'application/epub',
-    });
-    final r = await http.get(uri).timeout(const Duration(seconds: 20));
-    if (r.statusCode != 200) throw Exception('The free library did not answer (${r.statusCode}).');
-    final d = jsonDecode(r.body) as Map;
-    return ((d['results'] as List?) ?? []).map((x) {
-      final m = Map<String, dynamic>.from(x as Map);
-      final f = Map<String, dynamic>.from((m['formats'] ?? {}) as Map);
-      final epub = (f['application/epub+zip'] ?? '') as String;
-      return FreeBook(
-        m['id'] as int,
-        (m['title'] ?? '') as String,
-        ((m['authors'] as List?) ?? []).map((a) {
-          final n = ((a as Map)['name'] ?? '') as String;
-          final parts = n.split(', ');
-          return parts.length == 2 ? '${parts[1]} ${parts[0]}' : n;
-        }).join(', '),
-        epub,
-        (f['image/jpeg'] ?? '') as String,
-        (m['download_count'] ?? 0) as int,
+  static const _ua = {
+    'User-Agent': 'Mozilla/5.0 (Linux; Android 16; SM-S901E) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Mobile Safari/537.36',
+    'Accept': '*/*',
+  };
+
+  static FreeBook gutenberg(int id, String title, String author) => FreeBook(
+        id,
+        title,
+        author,
+        'https://www.gutenberg.org/ebooks/$id.epub3.images',
+        'https://www.gutenberg.org/cache/epub/$id/pg$id.cover.medium.jpg',
+        0,
       );
-    }).where((b) => b.epubUrl.isNotEmpty).toList();
+
+  /// Well-known classics shown instantly (no catalogue needed).
+  static final popular = <FreeBook>[
+    gutenberg(1342, 'Pride and Prejudice', 'Jane Austen'),
+    gutenberg(158, 'Emma', 'Jane Austen'),
+    gutenberg(161, 'Sense and Sensibility', 'Jane Austen'),
+    gutenberg(1260, 'Jane Eyre', 'Charlotte Brontë'),
+    gutenberg(768, 'Wuthering Heights', 'Emily Brontë'),
+    gutenberg(514, 'Little Women', 'Louisa May Alcott'),
+    gutenberg(64317, 'The Great Gatsby', 'F. Scott Fitzgerald'),
+    gutenberg(1661, 'The Adventures of Sherlock Holmes', 'Arthur Conan Doyle'),
+    gutenberg(2852, 'The Hound of the Baskervilles', 'Arthur Conan Doyle'),
+    gutenberg(244, 'A Study in Scarlet', 'Arthur Conan Doyle'),
+    gutenberg(108, 'The Return of Sherlock Holmes', 'Arthur Conan Doyle'),
+    gutenberg(84, 'Frankenstein', 'Mary Shelley'),
+    gutenberg(345, 'Dracula', 'Bram Stoker'),
+    gutenberg(43, 'The Strange Case of Dr Jekyll and Mr Hyde', 'Robert Louis Stevenson'),
+    gutenberg(120, 'Treasure Island', 'Robert Louis Stevenson'),
+    gutenberg(174, 'The Picture of Dorian Gray', 'Oscar Wilde'),
+    gutenberg(98, 'A Tale of Two Cities', 'Charles Dickens'),
+    gutenberg(1400, 'Great Expectations', 'Charles Dickens'),
+    gutenberg(46, 'A Christmas Carol', 'Charles Dickens'),
+    gutenberg(730, 'Oliver Twist', 'Charles Dickens'),
+    gutenberg(11, "Alice's Adventures in Wonderland", 'Lewis Carroll'),
+    gutenberg(16, 'Peter Pan', 'J. M. Barrie'),
+    gutenberg(55, 'The Wonderful Wizard of Oz', 'L. Frank Baum'),
+    gutenberg(236, 'The Jungle Book', 'Rudyard Kipling'),
+    gutenberg(74, 'The Adventures of Tom Sawyer', 'Mark Twain'),
+    gutenberg(76, 'Adventures of Huckleberry Finn', 'Mark Twain'),
+    gutenberg(35, 'The Time Machine', 'H. G. Wells'),
+    gutenberg(36, 'The War of the Worlds', 'H. G. Wells'),
+    gutenberg(2701, 'Moby-Dick', 'Herman Melville'),
+    gutenberg(1184, 'The Count of Monte Cristo', 'Alexandre Dumas'),
+    gutenberg(2600, 'War and Peace', 'Leo Tolstoy'),
+    gutenberg(2554, 'Crime and Punishment', 'Fyodor Dostoyevsky'),
+    gutenberg(5200, 'Metamorphosis', 'Franz Kafka'),
+    gutenberg(2814, 'Dubliners', 'James Joyce'),
+    gutenberg(33, 'The Scarlet Letter', 'Nathaniel Hawthorne'),
+    gutenberg(1952, 'The Yellow Wallpaper', 'Charlotte Perkins Gilman'),
+    gutenberg(1513, 'Romeo and Juliet', 'William Shakespeare'),
+    gutenberg(1524, 'Hamlet', 'William Shakespeare'),
+    gutenberg(2591, "Grimms' Fairy Tales", 'Jacob and Wilhelm Grimm'),
+    gutenberg(1232, 'The Prince', 'Niccolò Machiavelli'),
+    gutenberg(132, 'The Art of War', 'Sun Tzu'),
+    gutenberg(2680, 'Meditations', 'Marcus Aurelius'),
+    gutenberg(205, 'Walden', 'Henry David Thoreau'),
+    gutenberg(1727, 'The Odyssey', 'Homer'),
+    gutenberg(996, 'Don Quixote', 'Miguel de Cervantes'),
+  ];
+
+  static Future<List<FreeBook>> searchFree(String q) async {
+    if (q.trim().isEmpty) return popular;
+    // 1) Gutendex catalogue
+    try {
+      final uri = Uri.https('gutendex.com', '/books/', {'search': q.trim(), 'mime_type': 'application/epub'});
+      final r = await http.get(uri, headers: _ua).timeout(const Duration(seconds: 12));
+      if (r.statusCode == 200) {
+        final d = jsonDecode(r.body) as Map;
+        final list = ((d['results'] as List?) ?? []).map((x) {
+          final m = Map<String, dynamic>.from(x as Map);
+          final names = ((m['authors'] as List?) ?? []).map((a) {
+            final n = ((a as Map)['name'] ?? '') as String;
+            final parts = n.split(', ');
+            return parts.length == 2 ? '${parts[1]} ${parts[0]}' : n;
+          }).join(', ');
+          return gutenberg(m['id'] as int, (m['title'] ?? '') as String, names);
+        }).toList();
+        if (list.isNotEmpty) return list;
+      }
+    } catch (_) {}
+    // 2) Project Gutenberg's own search (OPDS feed)
+    final r = await http
+        .get(Uri.parse('https://www.gutenberg.org/ebooks/search.opds/?query=${Uri.encodeQueryComponent(q.trim())}'), headers: _ua)
+        .timeout(const Duration(seconds: 20));
+    if (r.statusCode != 200) throw Exception('The free library did not answer (${r.statusCode}).');
+    final out = <FreeBook>[];
+    final seen = <int>{};
+    for (final m in RegExp(r'<entry>([\s\S]*?)</entry>').allMatches(r.body)) {
+      final e = m.group(1)!;
+      final id = int.tryParse(RegExp(r'/ebooks/(\d+)').firstMatch(e)?.group(1) ?? '');
+      if (id == null || !seen.add(id)) continue;
+      String clean(String s) => s
+          .replaceAll(RegExp(r'<[^>]+>'), '')
+          .replaceAll('&amp;', '&')
+          .replaceAll('&#39;', "'")
+          .replaceAll('&quot;', '"')
+          .trim();
+      final title = clean(RegExp(r'<title[^>]*>([\s\S]*?)</title>').firstMatch(e)?.group(1) ?? '');
+      final author = clean(RegExp(r'<content[^>]*>([\s\S]*?)</content>').firstMatch(e)?.group(1) ?? '');
+      if (title.isEmpty) continue;
+      out.add(gutenberg(id, title, author));
+    }
+    return out;
   }
 
   Future<Ebook> downloadFree(FreeBook f, LibraryStore library) async {
-    final r = await http.get(Uri.parse(f.epubUrl)).timeout(const Duration(seconds: 90));
+    var r = await http.get(Uri.parse(f.epubUrl), headers: _ua).timeout(const Duration(seconds: 90));
+    if (r.statusCode != 200 || r.bodyBytes.length < 1000 || r.bodyBytes[0] != 0x50) {
+      // some books only have the older EPUB format
+      r = await http.get(Uri.parse('https://www.gutenberg.org/ebooks/${f.id}.epub.images'), headers: _ua)
+          .timeout(const Duration(seconds: 90));
+    }
+    if (r.statusCode == 200 && r.bodyBytes.isNotEmpty && r.bodyBytes[0] != 0x50) {
+      throw Exception('Project Gutenberg sent a web page instead of the book. Try again in a minute.');
+    }
     if (r.statusCode != 200) throw Exception('Download failed (${r.statusCode}).');
     return importEpub(r.bodyBytes, library, fallbackTitle: f.title, fallbackAuthor: f.author);
   }

@@ -215,7 +215,11 @@ class _FreeBooksScreenState extends State<FreeBooksScreen> {
       final r = await EbookStore.searchFree(_q.text);
       setState(() => _results = r);
     } catch (e) {
-      setState(() => _err = 'Couldn’t reach the free library. Check your internet and try again.');
+      setState(() {
+        _err = 'Search couldn’t reach the free library right now. The popular classics below still work — '
+            'or try again in a minute.';
+        _results = EbookStore.popular;
+      });
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -230,7 +234,8 @@ class _FreeBooksScreenState extends State<FreeBooksScreen> {
       openReader(context, e);
     } catch (err) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Download failed. Try again in a moment.')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(err.toString().contains('web page') ? 'Project Gutenberg is busy — try again in a minute.' : 'Download failed. Check your internet and try again.')));
       }
     } finally {
       if (mounted) setState(() => _downloading.remove(f.id));
@@ -256,7 +261,8 @@ class _FreeBooksScreenState extends State<FreeBooksScreen> {
             ),
           ),
           const SizedBox(height: 6),
-          Text('From Project Gutenberg — free, legal, public-domain books.', style: TextStyle(color: muted, fontSize: 12.5)),
+          Text(_q.text.trim().isEmpty ? 'Popular classics from Project Gutenberg — free, legal, public-domain books.'
+              : 'Results from Project Gutenberg — free, legal, public-domain books.', style: TextStyle(color: muted, fontSize: 12.5)),
           const SizedBox(height: 10),
           if (_loading) const Padding(padding: EdgeInsets.all(30), child: Center(child: CircularProgressIndicator())),
           if (_err != null) Text(_err!),
