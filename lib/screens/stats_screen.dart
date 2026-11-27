@@ -150,7 +150,7 @@ class _GoodreadsPanel extends StatelessWidget {
   const _GoodreadsPanel();
 
   Future<void> _pick(BuildContext context, LibraryStore store) async {
-    final res = await FilePicker.pickFiles(type: FileType.any, withData: true);
+    final res = await FilePicker.platform.pickFiles(type: FileType.any, withData: true);
     final bytes = res?.files.single.bytes;
     if (bytes == null) return;
     final msg = store.importGoodreadsCsv(utf8.decode(bytes, allowMalformed: true));
