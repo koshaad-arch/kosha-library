@@ -23,8 +23,8 @@ jobs:
             'https://gutendex.com/books/?search=pride%20prejudice' \
             'https://www.gutenberg.org/ebooks/search.opds/?query=austen' \
             https://archive.org/download/pg1342/pg1342-images-3.epub ; do
-            code=$(curl -sL -A "$UA" -o /tmp/f -w '%{http_code} %{content_type} %{size_download} %{url_effective}' --max-time 60 "$u")
-            head=$(head -c 4 /tmp/f | xxd -p)
+            code=$(curl -sL -A "$UA" -o /tmp/f -w '%{http_code} %{content_type} %{size_download} %{url_effective}' --max-time 60 "$u" || true)
+            head=$(head -c 4 /tmp/f 2>/dev/null | xxd -p || true); rm -f /tmp/f.keep; cp /tmp/f /tmp/f.keep 2>/dev/null || true
             echo "$code first=$head <- $u" | tee -a probe.log
           done
           head -c 600 /tmp/f >> probe.log || true
