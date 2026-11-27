@@ -533,7 +533,7 @@ class _Tiles extends StatelessWidget {
       physics: const NeverScrollableScrollPhysics(),
       mainAxisSpacing: 8,
       crossAxisSpacing: 8,
-      childAspectRatio: cols == 6 ? 1.1 : 0.92,
+      childAspectRatio: cols == 6 ? 0.95 : 0.74,
       children: tiles.map((t) {
         final on = store.statusFilter == t.$1;
         return Material(
@@ -552,8 +552,8 @@ class _Tiles extends StatelessWidget {
                 children: [
                   Text(t.$2, style: const TextStyle(fontSize: 15)),
                   FittedBox(child: Text(t.$3, style: serif(22, color: const Color(0xFFFBEEF2)))),
-                  Text(t.$4, maxLines: 1, overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: Color(0xFFF1DBE5), fontSize: 12, fontWeight: FontWeight.w700)),
+                  Text(t.$4, maxLines: 2, overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: Color(0xFFF1DBE5), fontSize: 12, fontWeight: FontWeight.w700, height: 1.15)),
                   const Spacer(),
                   Text(t.$5, maxLines: 2, overflow: TextOverflow.ellipsis,
                       style: const TextStyle(color: Color(0xFFD6B7C6), fontSize: 11, height: 1.2)),
