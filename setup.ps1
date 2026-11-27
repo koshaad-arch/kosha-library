@@ -8,6 +8,8 @@ flutter create --org com.koshagandhi --project-name kosha_library --platforms an
 
 # flutter create may overwrite the manifest, so restore ours (camera + internet permissions)
 Copy-Item -Force .\setup_files\AndroidManifest.xml .\android\app\src\main\AndroidManifest.xml
+New-Item -ItemType Directory -Force .\android\app\src\main\kotlin\com\koshagandhi\kosha_library | Out-Null
+Copy-Item -Force .\setup_files\MainActivity.kt .\android\app\src\main\kotlin\com\koshagandhi\kosha_library\MainActivity.kt
 
 # The barcode scanner needs Android 6.0 (API 23) or newer
 $gradle = if (Test-Path .\android\app\build.gradle.kts) { ".\android\app\build.gradle.kts" } else { ".\android\app\build.gradle" }

@@ -1,6 +1,3 @@
-import 'dart:convert';
-
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -150,10 +147,14 @@ class _GoodreadsPanel extends StatelessWidget {
   const _GoodreadsPanel();
 
   Future<void> _pick(BuildContext context, LibraryStore store) async {
-    final res = await FilePicker.platform.pickFiles(type: FileType.any, withData: true);
-    final bytes = res?.files.single.bytes;
-    if (bytes == null) return;
-    final msg = store.importGoodreadsCsv(utf8.decode(bytes, allowMalformed: true));
+    String? text;
+    try {
+      text = await const MethodChannel('kosha/files').invokeMethod<String>('pickText');
+    } catch (_) {
+      text = null;
+    }
+    if (text == null) return;
+    final msg = store.importGoodreadsCsv(text);
     if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
