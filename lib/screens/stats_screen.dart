@@ -245,6 +245,14 @@ Future<void> importGoodreadsFlow(BuildContext context) async {
   if (context.mounted) _snack(context, msg);
 }
 
+Future<void> importKindleFlow(BuildContext context) async {
+  final store = context.read<LibraryStore>();
+  final f = await FileChannel.pick();
+  if (f == null) return;
+  final msg = store.importKindleHighlights(FileChannel.text(f.$2));
+  if (context.mounted) _snack(context, msg);
+}
+
 Future<void> restoreBackupFlow(BuildContext context) async {
   final store = context.read<LibraryStore>();
   final f = await FileChannel.pick();
@@ -290,6 +298,24 @@ class SettingsScreen extends StatelessWidget {
           ),
         ),
         const _Panel(title: 'Bring in your Goodreads', child: _GoodreadsPanel()),
+        _Panel(
+          title: 'Kindle',
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(
+              'Amazon doesn’t let other apps read your Kindle library directly, so the app connects through your highlights: '
+              'import “My Clippings.txt” (Kindle e-reader: plug it in, it’s in the documents folder) or the Notebook export '
+              '(Kindle app → open a book → Notebook → Export → email it to yourself, save the file). Highlights attach to each '
+              'book, and Kindle books you haven’t added yet are added. Kindle books show “Read on Kindle”.',
+              style: TextStyle(color: muted, fontSize: 13),
+            ),
+            const SizedBox(height: 8),
+            FilledButton.icon(
+              icon: const Icon(Icons.tablet_android),
+              label: const Text('Import Kindle highlights'),
+              onPressed: () => importKindleFlow(context),
+            ),
+          ]),
+        ),
         const _Panel(title: 'Your owned books & Amazon wishlist', child: _ImportPanel()),
         _Panel(
           title: 'Backup & settings',

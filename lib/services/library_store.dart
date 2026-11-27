@@ -729,6 +729,82 @@ class LibraryStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Imports Kindle highlights & notes from "My Clippings.txt" (Kindle e-reader)
+  /// or the Notebook export the Kindle app emails (HTML). Books not on the shelf
+  /// are added as Kindle books.
+  String importKindleHighlights(String text) {
+    final items = <(String, String, String)>[]; // title, author, note line
+    String clean(String s) => s
+        .replaceAll(RegExp(r'<[^>]+>'), '')
+        .replaceAll('&amp;', '&')
+        .replaceAll('&#39;', "'")
+        .replaceAll('&quot;', '"')
+        .replaceAll('&lt;', '<')
+        .replaceAll('&gt;', '>')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+    if (text.contains('noteText') || text.contains('bookTitle')) {
+      final title = clean(RegExp(r'''class=["']bookTitle["'][^>]*>([\s\S]*?)</div>''').firstMatch(text)?.group(1) ?? '');
+      final author = clean(RegExp(r'''class=["']authors["'][^>]*>([\s\S]*?)</div>''').firstMatch(text)?.group(1) ?? '');
+      final re = RegExp(r'''class=["']noteHeading["'][^>]*>([\s\S]*?)</div>\s*<div[^>]*class=["']noteText["'][^>]*>([\s\S]*?)</(?:div|h3)>''');
+      for (final m in re.allMatches(text)) {
+        final head = clean(m.group(1)!);
+        final body = clean(m.group(2)!);
+        if (body.isEmpty) continue;
+        final where = RegExp(r'(Page \S+|Location \S+)').allMatches(head).map((x) => x.group(1)).join(' · ');
+        final isNote = head.toLowerCase().startsWith('note');
+        items.add((title, author, '${isNote ? '📝 ' : ''}$body${where.isNotEmpty ? '  ($where)' : ''}'));
+      }
+    } else {
+      for (final block in text.replaceAll('﻿', '').split('==========')) {
+        final lines = block.split(RegExp(r'\r?\n')).map((l) => l.trim()).where((l) => l.isNotEmpty).toList();
+        if (lines.length < 3) continue;
+        final head = lines[0];
+        final meta = lines[1];
+        if (!meta.startsWith('-') || meta.toLowerCase().contains('bookmark')) continue;
+        final am = RegExp(r'^(.*)\(([^()]*)\)\s*$').firstMatch(head);
+        final title = (am?.group(1) ?? head).trim();
+        var author = (am?.group(2) ?? '').trim();
+        final parts = author.split(', ');
+        if (parts.length == 2 && !parts[1].contains(' ')) author = '${parts[1]} ${parts[0]}';
+        final where = RegExp(r'(page \S+|Location \S+)', caseSensitive: false).allMatches(meta).map((x) => x.group(1)).join(' · ');
+        final isNote = meta.toLowerCase().contains('your note');
+        items.add((title, author, '${isNote ? '📝 ' : ''}${lines.sublist(2).join(' ')}${where.isNotEmpty ? '  ($where)' : ''}'));
+      }
+    }
+    if (items.isEmpty) return 'No Kindle highlights found in that file. Use “My Clippings.txt” or the Notebook export from the Kindle app.';
+    var newBooks = 0, added = 0;
+    final touched = <String>{};
+    for (final (title, author, note) in items) {
+      if (title.isEmpty) continue;
+      var b = findBook(title: title, author: author);
+      if (b == null) {
+        final cut = title.indexOf(RegExp(r' \(|: '));
+        b = Book(
+          id: _newId('k'),
+          title: cut > 2 ? title.substring(0, cut).trim() : title,
+          subtitle: cut > 2 ? title.substring(cut).replaceAll(RegExp(r'^[ :(]+|\)$'), '').trim() : '',
+          author: author,
+          format: 'Kindle',
+          own: 'own',
+          status: ReadStatus.reading,
+        );
+        _books.add(b);
+        newBooks++;
+      }
+      if (!b.kindleNotes.contains(note)) {
+        b.kindleNotes.add(note);
+        added++;
+      }
+      touched.add(b.id);
+    }
+    _scheduleSave();
+    notifyListeners();
+    Future.delayed(const Duration(seconds: 2), findMissingPages);
+    return 'Kindle: $added new highlights across ${touched.length} books'
+        '${newBooks > 0 ? ' · $newBooks Kindle books added to your shelf' : ''}.';
+  }
+
   void markNotOwned(List<Book> list) {
     for (final b in list) {
       b.own = 'none';

@@ -5,7 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../services/library_store.dart';
 import '../theme.dart';
 import 'add_book_screen.dart';
-import 'stats_screen.dart' show importOwnedFlow, importGoodreadsFlow, importAmazonFlow, restoreBackupFlow;
+import 'stats_screen.dart' show importOwnedFlow, importGoodreadsFlow, importAmazonFlow, importKindleFlow, restoreBackupFlow;
 
 /// Shown whenever the library is empty (e.g. right after installing).
 class WelcomeScreen extends StatelessWidget {
@@ -98,6 +98,13 @@ class WelcomeScreen extends StatelessWidget {
               title: 'Scan or add books yourself',
               text: 'Scan the barcode on the back of each book, type an ISBN or title, or add one by hand.',
               onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AddBookScreen(startScanning: true))),
+            ),
+            option(
+              emoji: '📱',
+              title: 'Import from Kindle',
+              text: 'Your Kindle highlights file (“My Clippings.txt” or the Kindle app’s Notebook export). '
+                  'Adds those Kindle books with their highlights.',
+              onTap: () => importKindleFlow(context),
             ),
             const SizedBox(height: 6),
             Center(

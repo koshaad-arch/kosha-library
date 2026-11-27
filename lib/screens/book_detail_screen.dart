@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../models/book.dart';
+import '../services/file_channel.dart';
 import '../services/goodreads_sync.dart';
 import '../services/library_store.dart';
 import '../theme.dart';
@@ -22,7 +23,7 @@ class BookDetailScreen extends StatefulWidget {
 }
 
 class _BookDetailScreenState extends State<BookDetailScreen> {
-  late final TextEditingController _review, _quote, _page, _pages, _price, _amz, _cover;
+  late final TextEditingController _review, _quote, _page, _pages, _price, _amz, _cover, _asin;
 
   @override
   void initState() {
@@ -35,6 +36,7 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
     _price = TextEditingController(text: b?.price?.toString() ?? '');
     _amz = TextEditingController(text: b?.amz ?? '');
     _cover = TextEditingController(text: b?.coverUrl ?? '');
+    _asin = TextEditingController(text: b?.asin ?? '');
   }
 
   @override
@@ -46,6 +48,7 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
     _price.dispose();
     _amz.dispose();
     _cover.dispose();
+    _asin.dispose();
     super.dispose();
   }
 
@@ -54,6 +57,27 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
     if (!ok && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Couldn\'t open the link.')));
     }
+  }
+
+  /// Opens the book in the Kindle app (exact book if we know its ASIN), else the
+  /// Kindle app's library, else Kindle in the browser.
+  Future<void> _readOnKindle(Book b) async {
+    final asin = b.kindleAsin;
+    if (asin.isNotEmpty) {
+      try {
+        if (await launchUrl(Uri.parse('kindle://book?action=open&asin=$asin'), mode: LaunchMode.externalApplication)) return;
+      } catch (_) {}
+    }
+    if (await FileChannel.openApp('com.amazon.kindle')) {
+      if (asin.isEmpty && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('Kindle opened — find “${b.title}” in your library. Add the book’s ASIN here to open it directly next time.')));
+      }
+      return;
+    }
+    await launchUrl(
+        Uri.parse(asin.isNotEmpty ? 'https://read.amazon.in/?asin=$asin' : 'https://read.amazon.in/kindle-library'),
+        mode: LaunchMode.externalApplication);
   }
 
   Future<void> _postReview(Book b, {required bool goodreads}) async {
@@ -188,6 +212,20 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
               ),
             ],
           ),
+          if (b.format == 'Kindle' || b.kindleAsin.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 14),
+              child: FilledButton.icon(
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size.fromHeight(48),
+                  backgroundColor: const Color(0xFF232F3E),
+                  foregroundColor: Colors.white,
+                ),
+                icon: const Icon(Icons.tablet_android),
+                label: const Text('Read on Kindle'),
+                onPressed: () => _readOnKindle(b),
+              ),
+            ),
           Builder(builder: (context) {
             final eb = context.watch<EbookStore>().forBook(b.id);
             if (eb == null) return const SizedBox.shrink();
@@ -431,6 +469,21 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
               store.touch(b);
             },
           ),
+          if (b.format == 'Kindle') ...[
+            const SizedBox(height: 10),
+            TextField(
+              controller: _asin,
+              textCapitalization: TextCapitalization.characters,
+              decoration: const InputDecoration(
+                labelText: 'Kindle ASIN (optional)',
+                hintText: 'B0… — lets “Read on Kindle” open this exact book',
+              ),
+              onChanged: (v) {
+                b.asin = v.trim();
+                store.touch(b);
+              },
+            ),
+          ],
           const SizedBox(height: 10),
           TextField(
             controller: _cover,
@@ -498,6 +551,32 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
               ),
             ],
           ),
+          if (b.kindleNotes.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            ExpansionTile(
+              tilePadding: EdgeInsets.zero,
+              initiallyExpanded: true,
+              title: Text('Kindle highlights (${b.kindleNotes.length})', style: const TextStyle(fontWeight: FontWeight.w700)),
+              trailing: IconButton(
+                tooltip: 'Copy all',
+                icon: const Icon(Icons.copy_all),
+                onPressed: () {
+                  Clipboard.setData(ClipboardData(text: '${b.title} — ${b.author}\n\n${b.kindleNotes.map((n) => '“$n”').join('\n\n')}'));
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Highlights copied')));
+                },
+              ),
+              children: [
+                for (final n in b.kindleNotes)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Container(width: 4, height: 38, margin: const EdgeInsets.only(right: 10, top: 2), color: const Color(0xFFF0AC2E)),
+                      Expanded(child: Text(n, style: const TextStyle(height: 1.4))),
+                    ]),
+                  ),
+              ],
+            ),
+          ],
           label('Favourite quote'),
           TextField(
             controller: _quote,

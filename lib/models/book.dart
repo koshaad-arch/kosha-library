@@ -56,6 +56,8 @@ class Book {
   DateTime added;
   String goodreadsId;
   String grSig;
+  String asin; // Kindle edition id (B0…)
+  List<String> kindleNotes; // highlights imported from Kindle
   String own; // own | wish | none
   int? price; // ₹, for wishlist books
   String prio; // High | Medium | Low
@@ -86,11 +88,14 @@ class Book {
     DateTime? added,
     this.goodreadsId = '',
     this.grSig = '',
+    this.asin = '',
+    List<String>? kindleNotes,
     this.own = 'own',
     this.price,
     this.prio = '',
     this.amz = '',
   })  : moods = moods ?? [],
+        kindleNotes = kindleNotes ?? [],
         added = added ?? DateTime.now();
 
   double get progress =>
@@ -102,6 +107,12 @@ class Book {
   bool get isWish => own == 'wish';
   bool get isDigital => format == 'Kindle' || format == 'eBook' || format == 'Audiobook';
   bool get hasReview => review.trim().isNotEmpty;
+
+  /// The Kindle edition's id, typed in or taken from an Amazon Kindle link.
+  String get kindleAsin {
+    if (asin.trim().isNotEmpty) return asin.trim().toUpperCase();
+    return RegExp(r'/(?:dp|gp/product)/(B0[A-Z0-9]{8})').firstMatch(amz)?.group(1) ?? '';
+  }
 
   /// Small badge for the shelf: how you have this book.
   String get formatBadge => switch (format) {
@@ -162,6 +173,8 @@ class Book {
         coverUrl: (j['coverUrl'] ?? '') as String,
         added: _d(j['added']),
         goodreadsId: (j['goodreadsId'] ?? '').toString(),
+        asin: (j['asin'] ?? '') as String,
+        kindleNotes: ((j['kn'] ?? []) as List).map((e) => e.toString()).toList(),
         grSig: (j['grSig'] ?? '') as String,
         own: (j['own'] ?? 'own') as String,
         price: (j['price'] as num?)?.toInt(),
@@ -193,6 +206,8 @@ class Book {
         'coverUrl': coverUrl,
         'added': _ds(added),
         'goodreadsId': goodreadsId,
+        'asin': asin,
+        'kn': kindleNotes,
         'grSig': grSig,
         'own': own,
         'price': price,

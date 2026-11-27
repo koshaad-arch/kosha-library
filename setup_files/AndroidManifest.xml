@@ -30,8 +30,19 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.files"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
     </application>
     <queries>
+        <package android:name="com.amazon.kindle" />
+        <package android:name="com.amazon.sendtokindle" />
         <intent>
             <action android:name="android.intent.action.VIEW" />
             <data android:scheme="https" />

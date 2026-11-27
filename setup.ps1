@@ -10,6 +10,7 @@ flutter create --org com.koshagandhi --project-name kosha_library --platforms an
 Copy-Item -Force .\setup_files\AndroidManifest.xml .\android\app\src\main\AndroidManifest.xml
 New-Item -ItemType Directory -Force .\android\app\src\main\res\xml | Out-Null
 Copy-Item -Force .\setup_files\network_security_config.xml .\android\app\src\main\res\xml\network_security_config.xml
+Copy-Item -Force .\setup_files\file_paths.xml .\android\app\src\main\res\xml\file_paths.xml
 New-Item -ItemType Directory -Force .\android\app\src\main\kotlin\com\koshagandhi\kosha_library | Out-Null
 Copy-Item -Force .\setup_files\MainActivity.kt .\android\app\src\main\kotlin\com\koshagandhi\kosha_library\MainActivity.kt
 
@@ -22,6 +23,7 @@ $gradle = if (Test-Path .\android\app\build.gradle.kts) { ".\android\app\build.g
 if (Test-Path .\test\widget_test.dart) { Remove-Item .\test\widget_test.dart }
 
 Add-Content .\android\build.gradle.kts "`nsubprojects {`n    tasks.configureEach { if (name.startsWith(`"lintVital`")) enabled = false }`n}`n"
+Add-Content $gradle "`ndependencies {`n    implementation(`"androidx.core:core-ktx:1.13.1`")`n}`n"
 flutter pub get
 Write-Host ""
 Write-Host "Done. Plug in your phone (USB debugging on) and run:  flutter run"

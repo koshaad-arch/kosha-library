@@ -19,6 +19,24 @@ class FileChannel {
 
   static String text(Uint8List bytes) => utf8.decode(bytes, allowMalformed: true);
 
+  /// Opens another installed app (e.g. Kindle). Returns false if it isn't installed.
+  static Future<bool> openApp(String package) async {
+    try {
+      return await _ch.invokeMethod<bool>('openApp', {'package': package}) == true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Opens Android's share sheet for a file (pick Kindle / Send to Kindle there).
+  static Future<bool> shareFile(String path, String name, String mime, {String title = 'Send to Kindle'}) async {
+    try {
+      return await _ch.invokeMethod<bool>('shareFile', {'path': path, 'name': name, 'mime': mime, 'title': title}) == true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// Lets you choose where to save; returns true when saved.
   static Future<bool> save(String name, String content, {String mime = 'application/json'}) async {
     try {

@@ -3,6 +3,8 @@ package com.koshagandhi.kosha_library
 import android.app.Activity
 import android.content.Intent
 import android.provider.OpenableColumns
+import androidx.core.content.FileProvider
+import java.io.File
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -39,6 +41,36 @@ class MainActivity : FlutterActivity() {
                     }
                     @Suppress("DEPRECATION")
                     startActivityForResult(intent, saveRequest)
+                }
+                "openApp" -> {
+                    val launch = packageManager.getLaunchIntentForPackage(call.argument<String>("package") ?: "")
+                    if (launch != null) {
+                        startActivity(launch)
+                        result.success(true)
+                    } else {
+                        result.success(false)
+                    }
+                }
+                "shareFile" -> {
+                    try {
+                        val src = File(call.argument<String>("path") ?: "")
+                        val name = (call.argument<String>("name") ?: src.name).replace(Regex("[\\\\/:*?\"<>|]"), " ")
+                        val dir = File(cacheDir, "share")
+                        dir.mkdirs()
+                        val out = File(dir, name)
+                        src.copyTo(out, overwrite = true)
+                        val uri = FileProvider.getUriForFile(this, "$packageName.files", out)
+                        val send = Intent(Intent.ACTION_SEND).apply {
+                            type = call.argument<String>("mime") ?: "application/octet-stream"
+                            putExtra(Intent.EXTRA_STREAM, uri)
+                            putExtra(Intent.EXTRA_SUBJECT, name)
+                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        }
+                        startActivity(Intent.createChooser(send, call.argument<String>("title") ?: "Send to Kindle"))
+                        result.success(true)
+                    } catch (e: Exception) {
+                        result.error("share_failed", e.message, null)
+                    }
                 }
                 else -> result.notImplemented()
             }

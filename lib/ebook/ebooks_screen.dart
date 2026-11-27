@@ -168,6 +168,16 @@ class EbooksScreen extends StatelessWidget {
                 onTap: () => openReader(context, e),
                 trailing: PopupMenuButton<String>(
                   onSelected: (v) async {
+                    if (v == 'kindle') {
+                      final ext = e.kind == 'pdf' ? 'pdf' : 'epub';
+                      final ok = await FileChannel.shareFile(
+                          e.file, '${e.title}.$ext', e.kind == 'pdf' ? 'application/pdf' : 'application/epub+zip');
+                      if (!ok && context.mounted) {
+                        ScaffoldMessenger.of(context)
+                            .showSnackBar(const SnackBar(content: Text('Couldn’t open the share sheet.')));
+                      }
+                      return;
+                    }
                     if (v == 'remove') {
                       final ok = await showDialog<bool>(
                         context: context,
@@ -183,13 +193,17 @@ class EbooksScreen extends StatelessWidget {
                       if (ok == true) store.remove(e);
                     }
                   },
-                  itemBuilder: (_) => const [PopupMenuItem(value: 'remove', child: Text('Remove e-book'))],
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(value: 'kindle', child: Text('Send to Kindle…')),
+                    PopupMenuItem(value: 'remove', child: Text('Remove e-book')),
+                  ],
                 ),
               ),
             );
           }),
         const SizedBox(height: 18),
         Text(
+          'Tip: tap ⋮ on any e-book → “Send to Kindle…” and choose Kindle in the share sheet to read it on your Kindle too. '
           'Reads PDFs and EPUB files without DRM: free classics, books from Standard Ebooks, Project Gutenberg, Google Play '
           '“DRM-free” downloads, and many indie authors. Kindle books bought from Amazon are locked to the Kindle app '
           'and can’t be opened here.',
