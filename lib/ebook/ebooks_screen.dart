@@ -9,10 +9,14 @@ import '../services/library_store.dart';
 import '../theme.dart';
 import '../widgets/book_cover.dart';
 import 'ebook_store.dart';
+import 'pdf_reader_screen.dart';
 import 'reader_screen.dart';
 
 Future<void> openReader(BuildContext context, Ebook e) async {
-  await Navigator.push(context, MaterialPageRoute(builder: (_) => ReaderScreen(ebook: e)));
+  await Navigator.push(
+      context,
+      MaterialPageRoute(
+          builder: (_) => e.kind == 'pdf' ? PdfReaderScreen(ebook: e) : ReaderScreen(ebook: e)));
 }
 
 class EbooksScreen extends StatelessWidget {
@@ -21,17 +25,42 @@ class EbooksScreen extends StatelessWidget {
   Future<void> _import(BuildContext context) async {
     final f = await FileChannel.pick();
     if (f == null || !context.mounted) return;
-    if (!f.$1.toLowerCase().endsWith('.epub')) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(f.$1.toLowerCase().endsWith('.pdf')
-              ? 'PDFs aren’t supported yet — choose an EPUB file.'
-              : f.$1.toLowerCase().contains('.az') || f.$1.toLowerCase().endsWith('.kfx') || f.$1.toLowerCase().endsWith('.mobi')
-                  ? 'Kindle files are locked to the Kindle app — choose an EPUB file instead.'
-                  : 'Please choose an .epub file.')));
-      return;
-    }
+    final name = f.$1.toLowerCase();
     final store = context.read<EbookStore>();
     final lib = context.read<LibraryStore>();
+    final isPdf = name.endsWith('.pdf') || (f.$2.length > 4 && String.fromCharCodes(f.$2.sublist(0, 4)) == '%PDF');
+    if (isPdf) {
+      final base = f.$1.replaceAll(RegExp(r'\.pdf$', caseSensitive: false), '').replaceAll(RegExp(r'[_]+'), ' ').trim();
+      final t = TextEditingController(text: base), a = TextEditingController();
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (c) => AlertDialog(
+          title: const Text('Add this PDF'),
+          content: Column(mainAxisSize: MainAxisSize.min, children: [
+            TextField(controller: t, decoration: const InputDecoration(labelText: 'Title'), textCapitalization: TextCapitalization.words),
+            const SizedBox(height: 10),
+            TextField(controller: a, decoration: const InputDecoration(labelText: 'Author (optional)'), textCapitalization: TextCapitalization.words),
+            const SizedBox(height: 8),
+            const Text('If this book is already on your shelf, it is linked to it.', style: TextStyle(fontSize: 12)),
+          ]),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
+            FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Add & read')),
+          ],
+        ),
+      );
+      if (ok != true || !context.mounted) return;
+      final e = await store.importPdf(f.$2, t.text.trim().isEmpty ? base : t.text.trim(), a.text.trim(), lib);
+      if (context.mounted) openReader(context, e);
+      return;
+    }
+    if (!name.endsWith('.epub')) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(name.contains('.az') || name.endsWith('.kfx') || name.endsWith('.mobi')
+              ? 'Kindle files are locked to the Kindle app — choose an EPUB or PDF instead.'
+              : 'Please choose an EPUB or PDF file.')));
+      return;
+    }
     try {
       final e = await store.importEpub(f.$2, lib);
       if (context.mounted) {
@@ -104,7 +133,7 @@ class EbooksScreen extends StatelessWidget {
         Wrap(spacing: 8, runSpacing: 8, children: [
           FilledButton.icon(
             icon: const Icon(Icons.file_open_outlined),
-            label: const Text('Add EPUB from phone'),
+            label: const Text('Add EPUB or PDF'),
             onPressed: () => _import(context),
           ),
           OutlinedButton.icon(
@@ -117,7 +146,7 @@ class EbooksScreen extends StatelessWidget {
         if (list.isEmpty)
           Text(
             'No e-books yet. Tap “Free classics” to download one in a tap (Pride and Prejudice, Sherlock Holmes, '
-            'Tagore and 70,000 more), or “Add EPUB from phone” for books you have bought DRM-free.',
+            'Tagore and 70,000 more), or “Add EPUB or PDF” for your own files.',
             style: TextStyle(color: muted),
           )
         else
@@ -131,7 +160,7 @@ class EbooksScreen extends StatelessWidget {
                 leading: _EbookCover(e: e, width: 44),
                 title: Text(e.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: serif(15, color: scheme.onSurface)),
                 subtitle: Text(
-                  '${e.author}\n${(e.progress * 100).round()}% read'
+                  '${e.kind == 'pdf' ? 'PDF' : 'EPUB'}${e.author.isNotEmpty ? ' · ${e.author}' : ''}\n${(e.progress * 100).round()}% read'
                   '${e.highlights.isNotEmpty ? ' · ${e.highlights.length} highlights' : ''}'
                   '${shelf != null ? ' · ${shelf.status.label}' : ''}',
                 ),
@@ -161,7 +190,7 @@ class EbooksScreen extends StatelessWidget {
           }),
         const SizedBox(height: 18),
         Text(
-          'Reads EPUB files without DRM: free classics, books from Standard Ebooks, Project Gutenberg, Google Play '
+          'Reads PDFs and EPUB files without DRM: free classics, books from Standard Ebooks, Project Gutenberg, Google Play '
           '“DRM-free” downloads, and many indie authors. Kindle books bought from Amazon are locked to the Kindle app '
           'and can’t be opened here.',
           style: TextStyle(color: muted, fontSize: 12.5),

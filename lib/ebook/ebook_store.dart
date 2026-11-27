@@ -19,11 +19,21 @@ class Highlight {
   String color; // y b p o
   String note;
   final DateTime created;
-  Highlight(this.id, this.section, this.text, this.color, this.note, this.created);
-  Map<String, dynamic> toJson() =>
-      {'id': id, 's': section, 'text': text, 'c': color, 'note': note, 'at': created.toIso8601String()};
-  factory Highlight.fromJson(Map<String, dynamic> j) => Highlight(j['id'] as String, j['s'] as int, j['text'] as String,
-      (j['c'] ?? 'y') as String, (j['note'] ?? '') as String, DateTime.tryParse('${j['at']}') ?? DateTime.now());
+  final List<List<double>> rects; // PDF only: page-relative boxes
+  Highlight(this.id, this.section, this.text, this.color, this.note, this.created, [List<List<double>>? rects])
+      : rects = rects ?? const [];
+  Map<String, dynamic> toJson() => {
+        'id': id, 's': section, 'text': text, 'c': color, 'note': note, 'at': created.toIso8601String(),
+        if (rects.isNotEmpty) 'r': rects,
+      };
+  factory Highlight.fromJson(Map<String, dynamic> j) => Highlight(
+      j['id'] as String,
+      j['s'] as int,
+      j['text'] as String,
+      (j['c'] ?? 'y') as String,
+      (j['note'] ?? '') as String,
+      DateTime.tryParse('${j['at']}') ?? DateTime.now(),
+      ((j['r'] ?? []) as List).map((x) => (x as List).map((v) => (v as num).toDouble()).toList()).toList());
 }
 
 class Bookmark {
@@ -42,6 +52,8 @@ class Ebook {
   final String id;
   String title, author, bookId;
   final String file;
+  final String kind; // epub | pdf
+  int pdfPages;
   String coverFile;
   int section;
   double frac;
@@ -57,6 +69,8 @@ class Ebook {
     required this.title,
     required this.author,
     required this.file,
+    this.kind = 'epub',
+    this.pdfPages = 0,
     this.bookId = '',
     this.coverFile = '',
     this.section = 0,
@@ -76,7 +90,7 @@ class Ebook {
   double get secPerPage => pagesTurned >= 5 ? readSeconds / pagesTurned : 75;
 
   Map<String, dynamic> toJson() => {
-        'id': id, 'title': title, 'author': author, 'file': file, 'bookId': bookId, 'cover': coverFile,
+        'id': id, 'title': title, 'author': author, 'file': file, 'kind': kind, 'pdfPages': pdfPages, 'bookId': bookId, 'cover': coverFile,
         's': section, 'f': frac, 'p': progress, 'sec': readSeconds, 'turns': pagesTurned,
         'opened': lastOpened?.toIso8601String(), 'added': added.toIso8601String(),
         'hl': highlights.map((h) => h.toJson()).toList(), 'bm': bookmarks.map((b) => b.toJson()).toList(),
@@ -87,6 +101,8 @@ class Ebook {
         title: (j['title'] ?? '') as String,
         author: (j['author'] ?? '') as String,
         file: j['file'] as String,
+        kind: (j['kind'] ?? 'epub') as String,
+        pdfPages: (j['pdfPages'] ?? 0) as int,
         bookId: (j['bookId'] ?? '') as String,
         coverFile: (j['cover'] ?? '') as String,
         section: (j['s'] ?? 0) as int,
@@ -108,9 +124,11 @@ class ReaderSettings {
   int margin; // px
   String theme; // white | sepia | green | dark | black
   bool justify;
-  ReaderSettings({this.fontSize = 19, this.font = 'serif', this.lineHeight = 1.6, this.margin = 22, this.theme = 'white', this.justify = true});
+  String pdfTheme; // white | sepia | night
+  String pdfMode; // page | scroll
+  ReaderSettings({this.pdfTheme = 'white', this.pdfMode = 'page', this.fontSize = 19, this.font = 'serif', this.lineHeight = 1.6, this.margin = 22, this.theme = 'white', this.justify = true});
   Map<String, dynamic> toJson() =>
-      {'size': fontSize, 'font': font, 'lh': lineHeight, 'm': margin, 'theme': theme, 'j': justify};
+      {'size': fontSize, 'font': font, 'lh': lineHeight, 'm': margin, 'theme': theme, 'j': justify, 'pt': pdfTheme, 'pm': pdfMode};
   factory ReaderSettings.fromJson(Map<String, dynamic> j) => ReaderSettings(
         fontSize: ((j['size'] ?? 19) as num).toDouble(),
         font: (j['font'] ?? 'serif') as String,
@@ -118,6 +136,8 @@ class ReaderSettings {
         margin: (j['m'] ?? 22) as int,
         theme: (j['theme'] ?? 'white') as String,
         justify: (j['j'] ?? true) as bool,
+        pdfTheme: (j['pt'] ?? 'white') as String,
+        pdfMode: (j['pm'] ?? 'page') as String,
       );
 }
 
@@ -217,6 +237,29 @@ class EbookStore extends ChangeNotifier {
       ..[id] = parsed;
     changed();
     return e;
+  }
+
+  /// Saves a PDF into the app and links it to a shelf book (creating one if needed).
+  Future<Ebook> importPdf(Uint8List bytes, String title, String author, LibraryStore library) async {
+    final id = 'p${DateTime.now().microsecondsSinceEpoch}';
+    final file = File('${_dir.path}/$id.pdf');
+    await file.writeAsBytes(bytes, flush: true);
+    var book = library.findBook(title: title, author: author);
+    if (book == null) {
+      book = Book(id: 'eb$id', title: title, author: author, own: 'own', format: 'eBook');
+      library.add(book);
+    }
+    final e = Ebook(id: id, title: title, author: author, file: file.path, kind: 'pdf', bookId: book.id);
+    ebooks.add(e);
+    changed();
+    return e;
+  }
+
+  Future<void> saveCover(Ebook e, Uint8List jpg) async {
+    final cf = File('${_dir.path}/${e.id}.cover');
+    await cf.writeAsBytes(jpg, flush: true);
+    e.coverFile = cf.path;
+    changed();
   }
 
   Future<void> remove(Ebook e) async {

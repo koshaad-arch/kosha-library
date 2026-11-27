@@ -424,7 +424,7 @@ if(document.readyState==='complete')setTimeout(boot,60);else window.addEventList
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      builder: (c) => _DefinitionSheet(word: word),
+      builder: (c) => DefinitionSheet(word: word),
     );
   }
 
@@ -935,14 +935,14 @@ class _SelBtn extends StatelessWidget {
       );
 }
 
-class _DefinitionSheet extends StatefulWidget {
+class DefinitionSheet extends StatefulWidget {
   final String word;
-  const _DefinitionSheet({required this.word});
+  const DefinitionSheet({super.key, required this.word});
   @override
-  State<_DefinitionSheet> createState() => _DefinitionSheetState();
+  State<DefinitionSheet> createState() => _DefinitionSheetState();
 }
 
-class _DefinitionSheetState extends State<_DefinitionSheet> {
+class _DefinitionSheetState extends State<DefinitionSheet> {
   List<(String, String)>? _defs; // part of speech, definition
   String _phonetic = '';
   String? _err;

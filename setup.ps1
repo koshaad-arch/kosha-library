@@ -8,6 +8,8 @@ flutter create --org com.koshagandhi --project-name kosha_library --platforms an
 
 # flutter create may overwrite the manifest, so restore ours (camera + internet permissions)
 Copy-Item -Force .\setup_files\AndroidManifest.xml .\android\app\src\main\AndroidManifest.xml
+New-Item -ItemType Directory -Force .\android\app\src\main\res\xml | Out-Null
+Copy-Item -Force .\setup_files\network_security_config.xml .\android\app\src\main\res\xml\network_security_config.xml
 New-Item -ItemType Directory -Force .\android\app\src\main\kotlin\com\koshagandhi\kosha_library | Out-Null
 Copy-Item -Force .\setup_files\MainActivity.kt .\android\app\src\main\kotlin\com\koshagandhi\kosha_library\MainActivity.kt
 

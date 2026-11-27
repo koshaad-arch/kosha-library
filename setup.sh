@@ -4,6 +4,8 @@ set -e
 flutter create --org com.koshagandhi --project-name kosha_library --platforms android .
 cp -f setup_files/AndroidManifest.xml android/app/src/main/AndroidManifest.xml
 mkdir -p android/app/src/main/kotlin/com/koshagandhi/kosha_library
+mkdir -p android/app/src/main/res/xml
+cp -f setup_files/network_security_config.xml android/app/src/main/res/xml/network_security_config.xml
 cp -f setup_files/MainActivity.kt android/app/src/main/kotlin/com/koshagandhi/kosha_library/MainActivity.kt
 G=android/app/build.gradle.kts; [ -f "$G" ] || G=android/app/build.gradle
 sed -i.bak -E 's/minSdk *= *flutter\.minSdkVersion/minSdk = 23/; s/minSdkVersion +flutter\.minSdkVersion/minSdkVersion 23/' "$G" && rm -f "$G.bak"
