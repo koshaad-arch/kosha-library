@@ -24,6 +24,7 @@ jobs:
           python3 tool/make_test_epub.py /tmp/test.epub
           dart run tool/epub_check.dart /tmp/test.epub >> build.log 2>&1 || true
           dart run tool/pages_check.dart >> build.log 2>&1 || true
+          dart run tool/free_check.dart >> build.log 2>&1 || true
           tail -40 build.log
       - name: Build APKs
         run: |

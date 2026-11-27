@@ -281,8 +281,8 @@ class EbookStore extends ChangeNotifier {
         id,
         title,
         author,
-        'https://www.gutenberg.org/ebooks/$id.epub3.images',
-        'https://www.gutenberg.org/cache/epub/$id/pg$id.cover.medium.jpg',
+        'https://gutenberg.pglaf.org/cache/epub/$id/pg$id-images-3.epub',
+        'https://gutenberg.pglaf.org/cache/epub/$id/pg$id.cover.medium.jpg',
         0,
       );
 
@@ -380,17 +380,33 @@ class EbookStore extends ChangeNotifier {
     return out;
   }
 
+  /// Downloads from Project Gutenberg's official mirrors first (the main site often
+  /// answers "busy"), trying the newer EPUB3 file and then the classic EPUB.
   Future<Ebook> downloadFree(FreeBook f, LibraryStore library) async {
-    var r = await http.get(Uri.parse(f.epubUrl), headers: _ua).timeout(const Duration(seconds: 90));
-    if (r.statusCode != 200 || r.bodyBytes.length < 1000 || r.bodyBytes[0] != 0x50) {
-      // some books only have the older EPUB format
-      r = await http.get(Uri.parse('https://www.gutenberg.org/ebooks/${f.id}.epub.images'), headers: _ua)
-          .timeout(const Duration(seconds: 90));
+    final id = f.id;
+    final urls = [
+      'https://gutenberg.pglaf.org/cache/epub/$id/pg$id-images-3.epub',
+      'https://aleph.pglaf.org/cache/epub/$id/pg$id-images-3.epub',
+      'https://gutenberg.pglaf.org/cache/epub/$id/pg$id-images.epub',
+      'https://aleph.pglaf.org/cache/epub/$id/pg$id-images.epub',
+      'https://gutenberg.pglaf.org/cache/epub/$id/pg$id.epub',
+      'https://www.gutenberg.org/ebooks/$id.epub3.images',
+      'https://www.gutenberg.org/ebooks/$id.epub.images',
+    ];
+    Object? last;
+    for (final u in urls) {
+      try {
+        final r = await http.get(Uri.parse(u), headers: _ua).timeout(const Duration(seconds: 60));
+        final b = r.bodyBytes;
+        // a real EPUB is a zip file: it starts with "PK"
+        if (r.statusCode == 200 && b.length > 1000 && b[0] == 0x50 && b[1] == 0x4B) {
+          return importEpub(b, library, fallbackTitle: f.title, fallbackAuthor: f.author);
+        }
+        last = 'HTTP ${r.statusCode}';
+      } catch (e) {
+        last = e;
+      }
     }
-    if (r.statusCode == 200 && r.bodyBytes.isNotEmpty && r.bodyBytes[0] != 0x50) {
-      throw Exception('Project Gutenberg sent a web page instead of the book. Try again in a minute.');
-    }
-    if (r.statusCode != 200) throw Exception('Download failed (${r.statusCode}).');
-    return importEpub(r.bodyBytes, library, fallbackTitle: f.title, fallbackAuthor: f.author);
+    throw Exception('Could not download this book right now ($last).');
   }
 }

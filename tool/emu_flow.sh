@@ -26,3 +26,11 @@ adb shell input tap 540 1200 ; sleep 2
 adb shell input swipe 900 1200 200 1200 200 ; sleep 3
 adb exec-out screencap -p > shot7-next.png
 adb logcat -d | grep -iE "FATAL|E/flutter|chromium.*(Uncaught|error)" | grep -v gstatic | tail -60 > emu.log || true
+# free classics: download Pride and Prejudice inside the app
+adb shell input keyevent 4 ; sleep 3
+adb shell input keyevent 4 ; sleep 3
+tap "Free classics" ; sleep 6
+adb exec-out screencap -p > shot8-classics.png
+tap "Get" ; sleep 45
+adb exec-out screencap -p > shot9-classic-open.png
+adb logcat -d | grep -iE "FATAL|E/flutter" | grep -v gstatic | tail -30 >> emu.log || true
