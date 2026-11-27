@@ -1,0 +1,27 @@
+name: Hello test APK
+on:
+  push:
+    paths: ['.github/workflows/hello-test.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  hello:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - run: flutter create --org com.koshagandhi --platforms android hello_test
+      - run: cd hello_test && flutter build apk --release --split-per-abi && cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk ../HelloTest.apk
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: hello-test
+          name: Hello test
+          body: Blank test app for checking installs.
+          files: HelloTest.apk
+          make_latest: false
