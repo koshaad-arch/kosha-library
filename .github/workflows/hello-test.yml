@@ -17,11 +17,44 @@ jobs:
         with:
           channel: stable
       - run: flutter create --org com.koshagandhi --platforms android hello_test
-      - run: cd hello_test && flutter build apk --release --split-per-abi && cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk ../HelloTest.apk
+      - name: Proper release signing (v1+v2+v3)
+        working-directory: hello_test/android/app
+        run: |
+          keytool -genkeypair -keystore rel.jks -alias kosha -keyalg RSA -keysize 2048 -validity 10000 \
+            -storepass testpass123 -keypass testpass123 -dname "CN=Kosha Gandhi, O=Kosha, C=IN"
+          python3 - <<'PY'
+          import re
+          p='build.gradle.kts'; s=open(p).read()
+          block='''    signingConfigs {
+                  create("rel") {
+                      storeFile = file("rel.jks")
+                      storePassword = "testpass123"
+                      keyAlias = "kosha"
+                      keyPassword = "testpass123"
+                      enableV1Signing = true
+                      enableV2Signing = true
+                      enableV3Signing = true
+                  }
+              }
+              buildTypes {'''
+          s=s.replace('    buildTypes {', block, 1)
+          s=s.replace('signingConfig = signingConfigs.getByName("debug")','signingConfig = signingConfigs.getByName("rel")')
+          open(p,'w').write(s); print(s)
+          PY
+      - run: cd hello_test && flutter build apk --release --split-per-abi && cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk ../HelloSigned.apk
+      - name: Variant with older target SDK
+        run: |
+          cd hello_test
+          sed -i 's/targetSdk = flutter.targetSdkVersion/targetSdk = 34/' android/app/build.gradle.kts
+          sed -i 's/applicationId = "com.koshagandhi.hello_test"/applicationId = "com.koshagandhi.hello_test34"/' android/app/build.gradle.kts
+          grep -n "targetSdk\|applicationId" android/app/build.gradle.kts
+          flutter build apk --release --split-per-abi && cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk ../HelloOld.apk
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: hello-test
           name: Hello test
-          body: Blank test app for checking installs.
-          files: HelloTest.apk
+          body: Blank test apps for checking installs.
+          files: |
+            HelloSigned.apk
+            HelloOld.apk
           make_latest: false
