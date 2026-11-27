@@ -3,13 +3,11 @@ on:
   push:
     paths: ['.github/workflows/test-install.yml']
   workflow_dispatch:
+permissions:
+  contents: write
 jobs:
   install:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        api: [34, 35, 36]
     steps:
       - name: Enable KVM
         run: |
@@ -20,13 +18,33 @@ jobs:
         run: curl -sL -o app.apk https://github.com/${{ github.repository }}/releases/download/latest/KoshasLibrary.apk && ls -la app.apk
       - uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: ${{ matrix.api }}
+          api-level: 35
           arch: x86_64
           target: google_apis
           disable-animations: true
           script: |
             adb install -r app.apk
-            adb shell pm list packages | grep kosha
             adb shell monkey -p com.koshagandhi.kosha_library -c android.intent.category.LAUNCHER 1
-            sleep 15
-            adb logcat -d | grep -iE "kosha|flutter|FATAL|AndroidRuntime" | tail -60
+            sleep 25
+            adb exec-out screencap -p > shot1-shelf.png
+            adb shell input swipe 540 1600 540 500 400
+            sleep 3
+            adb exec-out screencap -p > shot2-scrolled.png
+            adb shell input tap 540 2280
+            sleep 6
+            adb exec-out screencap -p > shot3-wishlist.png
+            adb shell input tap 900 2280
+            sleep 6
+            adb exec-out screencap -p > shot4-stats.png
+            adb logcat -d | grep -iE "FATAL|flutter.*(error|exception)|E/flutter" | tail -80 > emu.log || true
+            adb shell wm size >> emu.log
+      - uses: softprops/action-gh-release@v2
+        if: always()
+        with:
+          tag_name: emulator-test
+          name: Emulator test
+          body: Screenshots from the latest emulator test.
+          files: |
+            shot*.png
+            emu.log
+          make_latest: false
