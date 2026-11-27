@@ -1,0 +1,36 @@
+name: Probe download sources
+on:
+  push:
+    paths: ['.github/workflows/probe.yml']
+permissions:
+  contents: write
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          UA='Mozilla/5.0 (Linux; Android 16; SM-S901E) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Mobile Safari/537.36'
+          for u in \
+            https://www.gutenberg.org/ebooks/1342.epub3.images \
+            https://www.gutenberg.org/cache/epub/1342/pg1342-images-3.epub \
+            https://www.gutenberg.org/cache/epub/1342/pg1342-images.epub \
+            https://gutenberg.pglaf.org/cache/epub/1342/pg1342-images-3.epub \
+            https://aleph.gutenberg.org/cache/epub/1342/pg1342-images-3.epub \
+            https://aleph.pglaf.org/cache/epub/1342/pg1342-images-3.epub \
+            https://gutenberg.readingroo.ms/cache/epub/1342/pg1342-images-3.epub \
+            https://mirror.csclub.uwaterloo.ca/gutenberg/cache/epub/1342/pg1342-images-3.epub \
+            https://standardebooks.org/ebooks/jane-austen/pride-and-prejudice/downloads/jane-austen_pride-and-prejudice.epub?source=download \
+            'https://gutendex.com/books/?search=pride%20prejudice' \
+            'https://www.gutenberg.org/ebooks/search.opds/?query=austen' \
+            https://archive.org/download/pg1342/pg1342-images-3.epub ; do
+            code=$(curl -sL -A "$UA" -o /tmp/f -w '%{http_code} %{content_type} %{size_download} %{url_effective}' --max-time 60 "$u")
+            head=$(head -c 4 /tmp/f | xxd -p)
+            echo "$code first=$head <- $u" | tee -a probe.log
+          done
+          head -c 600 /tmp/f >> probe.log || true
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: probe
+          name: probe
+          files: probe.log
+          make_latest: false
