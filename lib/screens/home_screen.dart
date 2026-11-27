@@ -6,6 +6,7 @@ import '../ebook/ebooks_screen.dart';
 import 'add_book_screen.dart';
 import 'shelf_screen.dart';
 import 'stats_screen.dart';
+import 'welcome_screen.dart';
 import 'wishlist_screen.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -17,6 +18,7 @@ class HomeScreen extends StatelessWidget {
     if (!store.loaded) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
+    if (store.books.isEmpty) return const WelcomeScreen();
     return Scaffold(
       body: SafeArea(
         bottom: false,

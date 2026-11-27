@@ -233,6 +233,26 @@ void openSettings(BuildContext context) =>
     Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen()));
 
 /// Imports, backup and app settings — kept apart from the reading stats.
+/// The import actions, usable from Settings and from the welcome screen.
+Future<void> importOwnedFlow(BuildContext context) => const _ImportPanel()._owned(context, context.read<LibraryStore>());
+Future<void> importAmazonFlow(BuildContext context) => const _ImportPanel()._amazon(context, context.read<LibraryStore>());
+
+Future<void> importGoodreadsFlow(BuildContext context) async {
+  final store = context.read<LibraryStore>();
+  final f = await FileChannel.pick();
+  if (f == null) return;
+  final msg = store.importGoodreadsCsv(FileChannel.text(f.$2));
+  if (context.mounted) _snack(context, msg);
+}
+
+Future<void> restoreBackupFlow(BuildContext context) async {
+  final store = context.read<LibraryStore>();
+  final f = await FileChannel.pick();
+  if (f == null) return;
+  final msg = store.restoreBackup(FileChannel.text(f.$2));
+  if (context.mounted) _snack(context, msg);
+}
+
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
 
@@ -321,6 +341,30 @@ class SettingsScreen extends StatelessWidget {
                     onPressed: () => _importWebCsv(context, store),
                   ),
                 ],
+              ),
+              const SizedBox(height: 6),
+              TextButton.icon(
+                style: TextButton.styleFrom(foregroundColor: AppColors.rose),
+                icon: const Icon(Icons.delete_sweep_outlined),
+                label: const Text('Start over (empty my library)'),
+                onPressed: () async {
+                  final ok = await showDialog<bool>(
+                    context: context,
+                    builder: (c) => AlertDialog(
+                      title: const Text('Empty your library?'),
+                      content: const Text('All books, ratings, reviews and wishlist items are removed from this phone. '
+                          'Export a backup first if you might want them back. E-books in the Read tab are kept.'),
+                      actions: [
+                        TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
+                        FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Empty library')),
+                      ],
+                    ),
+                  );
+                  if (ok == true) {
+                    store.clearLibrary();
+                    if (context.mounted) Navigator.popUntil(context, (r) => r.isFirst);
+                  }
+                },
               ),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,

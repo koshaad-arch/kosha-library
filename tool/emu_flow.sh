@@ -4,10 +4,14 @@ set -x
 tap() { for k in 1 2 3 4 5; do adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1; adb pull /sdcard/ui.xml /tmp/ui.xml >/dev/null 2>&1; xy=$(python3 tool/tap_text.py /tmp/ui.xml "$1") && { adb shell input tap $xy; return 0; }; sleep 3; done; echo "NOT FOUND: $1"; return 1; }
 adb install -r app.apk
 adb push tool/sample.pdf /sdcard/Download/sample-novel.pdf
+adb push tool/sample_library.csv /sdcard/Download/my-library.csv
 adb shell monkey -p com.koshagandhi.kosha_library -c android.intent.category.LAUNCHER 1
 sleep 25
-adb exec-out screencap -p > shot1-shelf.png
-tap "✍ Reviews" ; sleep 3; adb exec-out screencap -p > shot2-reviews.png
+adb exec-out screencap -p > shot1-welcome.png
+tap "Upload a CSV or Excel list" ; sleep 6
+tap "my-library" || { tap "Downloads"; sleep 3; tap "my-library"; }
+sleep 12
+adb exec-out screencap -p > shot2-imported.png
 tap "Read" ; sleep 4
 tap "Add EPUB or PDF" ; sleep 6
 adb exec-out screencap -p > shot3-picker.png

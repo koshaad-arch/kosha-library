@@ -2,10 +2,10 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart' show rootBundle;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/book.dart';
+import 'book_lookup.dart';
 import 'goodreads_sync.dart';
 import 'page_finder.dart';
 
@@ -63,16 +63,7 @@ class LibraryStore extends ChangeNotifier {
   Future<void> load() async {
     final prefs = await SharedPreferences.getInstance();
     final saved = prefs.getString(_kBooks);
-    if (saved != null) {
-      _books.addAll(Book.decodeList(saved));
-    } else {
-      final raw = await rootBundle.loadString('assets/books.json');
-      final list = (jsonDecode(raw) as List)
-          .map((e) => Book.fromJson(Map<String, dynamic>.from(e as Map)))
-          .toList();
-      _books.addAll(list);
-      await _saveNow();
-    }
+    if (saved != null) _books.addAll(Book.decodeList(saved));
     goal = prefs.getInt(_kGoal) ?? 24;
     showCovers = prefs.getBool(_kCovers) ?? true;
     pageSize = prefs.getInt('page_size_v1') ?? 24;
@@ -205,6 +196,7 @@ class LibraryStore extends ChangeNotifier {
       ));
     }
     final (added, updated) = _mergeGoodreads(items);
+    Future.delayed(const Duration(seconds: 2), findMissingPages);
     grLastSync = DateTime.now();
     syncMessage = 'Goodreads import: ${items.length} books checked, $added new, $updated updated.';
     _scheduleSave();
@@ -271,7 +263,7 @@ class LibraryStore extends ChangeNotifier {
   Future<void> findMissingPages({bool retryAll = false}) async {
     if (findingPages) return;
     if (retryAll) _pageTried.clear();
-    final todo = _books.where((b) => (b.pages ?? 0) <= 0 && !_pageTried.contains(b.id)).toList();
+    final todo = _books.where((b) => ((b.pages ?? 0) <= 0 || b.genre.isEmpty) && !_pageTried.contains(b.id)).toList();
     if (todo.isEmpty) {
       pagesMessage = missingPages == 0 ? 'Every book has its page count.' : '$missingPages books could not be found online — add their pages by hand.';
       notifyListeners();
@@ -285,13 +277,17 @@ class LibraryStore extends ChangeNotifier {
     Future<void> worker() async {
       while (i < todo.length) {
         final b = todo[i++];
-        final p = await PageFinder.find(b);
+        final (p, cats) = await PageFinder.find(b);
         done++;
         _pageTried.add(b.id);
         if (p != null && (b.pages ?? 0) <= 0) {
           b.pages = p;
           if (b.status == ReadStatus.read) b.currentPage = p;
           found++;
+        }
+        if (b.genre.isEmpty && cats.isNotEmpty) {
+          final g = BookLookup.guessGenre('$cats ${b.title}');
+          if (g.isNotEmpty) b.genre = g;
         }
         pagesMessage = 'Looking up page numbers… $done of ${todo.length} ($found found)';
         if (done % 5 == 0) _scheduleSave();
@@ -642,8 +638,24 @@ class LibraryStore extends ChangeNotifier {
       final pub = pick(r, ['publisher']);
       final y = int.tryParse(RegExp(r'\d{4}').stringMatch(pick(r, ['year', 'yearpublished', 'published'])) ?? '');
       final fmt = pick(r, ['format', 'binding', 'type']);
-      final stRaw = pick(r, ['status', 'readingstatus', 'exclusiveshelf']).toLowerCase().replaceAll(RegExp(r'[^a-z]'), '');
-      final gOk = kGenres.contains(g) ? g : '';
+      var stRaw = pick(r, ['status', 'readingstatus', 'exclusiveshelf']).toLowerCase().replaceAll(RegExp(r'[^a-z]'), '');
+      final readYN = (r.entries.where((e) => e.key.trim().toLowerCase() == 'read').firstOrNull?.value ?? '').trim().toLowerCase();
+      if (stRaw.isEmpty && (readYN == 'yes' || readYN == 'y' || readYN == 'true')) stRaw = 'read';
+      if (stRaw.isEmpty && (readYN == 'no' || readYN == 'n' || readYN == 'false')) stRaw = 'tbr';
+      // "Reading periods" like 22/06/2023 - 13/08/2025 (either side may be ?)
+      DateTime? dmy(String x) {
+        final m = RegExp(r'(\d{1,2})/(\d{1,2})/(\d{4})').firstMatch(x);
+        return m == null ? null : DateTime(int.parse(m.group(3)!), int.parse(m.group(2)!), int.parse(m.group(1)!));
+      }
+      final periods = pick(r, ['readingperiods', 'readingperiod', 'dates']);
+      final halves = periods.split(' - ');
+      final start = periods.isEmpty ? null : dmy(halves.first);
+      final end = halves.length > 1 ? dmy(halves[1]) : null;
+      if (stRaw == 'read' && start != null && end == null) stRaw = 'reading';
+      final cats = pick(r, ['categories', 'category', 'genre', 'shelves']);
+      final summary = pick(r, ['summary', 'description']);
+      final fmtTxt = '$fmt $cats';
+      final gOk = kGenres.contains(g) ? g : BookLookup.guessGenre(cats) == 'Other' ? '' : BookLookup.guessGenre(cats);
       final b = findBook(title: t, author: a, isbn: i);
       if (b != null) {
         if (!hit.add(b.id)) continue;
@@ -675,9 +687,12 @@ class LibraryStore extends ChangeNotifier {
           year: y,
           own: 'own',
           status: ReadStatusX.parse(stMap[stRaw] ?? 'tbr'),
-          format: RegExp(r'kindle|ebook', caseSensitive: false).hasMatch(fmt)
+          start: start,
+          end: end,
+          summary: _cleanSummary(summary),
+          format: RegExp(r'kindle|ebook', caseSensitive: false).hasMatch(fmtTxt)
               ? 'Kindle'
-              : RegExp(r'audio', caseSensitive: false).hasMatch(fmt)
+              : RegExp(r'audio', caseSensitive: false).hasMatch(fmtTxt)
                   ? 'Audiobook'
                   : RegExp(r'hard', caseSensitive: false).hasMatch(fmt)
                       ? 'Hardcover'
@@ -691,7 +706,27 @@ class LibraryStore extends ChangeNotifier {
     final gone = _books.where((b) => b.isOwned && !hit.contains(b.id)).toList();
     _scheduleSave();
     notifyListeners();
+    Future.delayed(const Duration(seconds: 2), findMissingPages);
     return ('Owned books from “$fileName”: $added added · $updated marked owned or filled in · $already already up to date.', gone);
+  }
+
+  static String _cleanSummary(String s) {
+    final t = s.replaceAll('\r', '').trim();
+    // drop second-hand seller notes ("Paperback. Very Good. We ship fast…")
+    if (t.length < 60 || RegExp(r'brand new|very good\.|like new|softcover|shipping|thriftbooks', caseSensitive: false).hasMatch(t.substring(0, t.length < 160 ? t.length : 160))) {
+      return '';
+    }
+    return t.length > 900 ? '${t.substring(0, 900)}…' : t;
+  }
+
+  /// Removes every book (used by “Start over” in Settings).
+  void clearLibrary() {
+    _books.clear();
+    page = 0;
+    statusFilter = 'all';
+    _pageTried.clear();
+    _scheduleSave();
+    notifyListeners();
   }
 
   void markNotOwned(List<Book> list) {
@@ -752,6 +787,7 @@ class LibraryStore extends ChangeNotifier {
     }
     _scheduleSave();
     notifyListeners();
+    Future.delayed(const Duration(seconds: 2), findMissingPages);
     return 'Amazon wishlist: $added added · $moved moved to your wishlist · $ownedAlready skipped (already owned)'
         '${skipped > 0 ? ' · $skipped non-book items left out' : ''}.';
   }

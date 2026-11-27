@@ -29,7 +29,6 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
-    - assets/books.json
     - assets/pdfjs/
     - assets/pdfjs/cmaps/
     - assets/pdfjs/standard_fonts/
