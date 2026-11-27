@@ -6,9 +6,8 @@ import 'package:kosha_library/ebook/epub.dart';
 Future<void> main() async {
   for (final id in [1342, 64317, 7164, 2600]) {
     final urls = [
-      'https://gutenberg.pglaf.org/cache/epub/$id/pg$id-images-3.epub',
-      'https://aleph.pglaf.org/cache/epub/$id/pg$id-images-3.epub',
       'https://gutenberg.pglaf.org/cache/epub/$id/pg$id.epub',
+      'https://gutenberg.pglaf.org/cache/epub/$id/pg$id-images-3.epub',
     ];
     var ok = false;
     for (final u in urls) {

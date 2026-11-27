@@ -384,13 +384,13 @@ class EbookStore extends ChangeNotifier {
   /// answers "busy"), trying the newer EPUB3 file and then the classic EPUB.
   Future<Ebook> downloadFree(FreeBook f, LibraryStore library) async {
     final id = f.id;
-    // (address, seconds allowed) — the illustrated edition first, then the lighter text-only one
+    // (address, seconds allowed) — the light text edition first (fast), then the illustrated one
     final urls = [
-      ('https://gutenberg.pglaf.org/cache/epub/$id/pg$id-images-3.epub', 150),
-      ('https://gutenberg.pglaf.org/cache/epub/$id/pg$id.epub', 90),
-      ('https://aleph.pglaf.org/cache/epub/$id/pg$id-images-3.epub', 150),
-      ('https://aleph.pglaf.org/cache/epub/$id/pg$id.epub', 90),
-      ('https://www.gutenberg.org/ebooks/$id.epub3.images', 90),
+      ('https://gutenberg.pglaf.org/cache/epub/$id/pg$id.epub', 60),
+      ('https://gutenberg.pglaf.org/cache/epub/$id/pg$id-images-3.epub', 120),
+      ('https://aleph.pglaf.org/cache/epub/$id/pg$id.epub', 60),
+      ('https://aleph.pglaf.org/cache/epub/$id/pg$id-images-3.epub', 120),
+      ('https://www.gutenberg.org/ebooks/$id.epub.noimages', 60),
     ];
     Object? last;
     for (final (u, secs) in urls) {

@@ -33,7 +33,8 @@ adb shell input keyevent 4 ; sleep 3
 adb exec-out screencap -p > shot7b-back.png
 tap "Free classics" ; sleep 6
 adb exec-out screencap -p > shot8-classics.png
-tap "Get" ; sleep 70
+tap "Get" ; sleep 40
+tap "Got it" ; sleep 2
 adb exec-out screencap -p > shot9-classic-open.png
 adb logcat -d | grep -iE "FATAL|E/flutter" | grep -v gstatic | tail -30 >> emu.log || true
 # Kindle highlights import from Settings
