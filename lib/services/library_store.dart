@@ -27,8 +27,6 @@ class LibraryStore extends ChangeNotifier {
   static const _kBooks = 'library_v1';
   static const _kGoal = 'goal_v1';
   static const _kCovers = 'covers_v1';
-  static const _kGrUser = 'gr_user_v1';
-  static const _kGrKey = 'gr_key_v1';
   static const _kGrLast = 'gr_last_v1';
 
   final List<Book> _books = [];
@@ -36,12 +34,9 @@ class LibraryStore extends ChangeNotifier {
   bool showCovers = true;
 
   // Goodreads sync
-  String grUser = '';
-  String grKey = '';
   DateTime? grLastSync;
-  bool syncing = false;
   String syncMessage = '';
-  bool get grConnected => grUser.isNotEmpty;
+
   bool loaded = false;
 
   // UI filter state
@@ -69,8 +64,6 @@ class LibraryStore extends ChangeNotifier {
     }
     goal = prefs.getInt(_kGoal) ?? 24;
     showCovers = prefs.getBool(_kCovers) ?? true;
-    grUser = prefs.getString(_kGrUser) ?? '';
-    grKey = prefs.getString(_kGrKey) ?? '';
     final last = prefs.getString(_kGrLast);
     grLastSync = last == null ? null : DateTime.tryParse(last);
     loaded = true;
@@ -87,8 +80,6 @@ class LibraryStore extends ChangeNotifier {
     await prefs.setString(_kBooks, Book.encodeList(_books));
     await prefs.setInt(_kGoal, goal);
     await prefs.setBool(_kCovers, showCovers);
-    await prefs.setString(_kGrUser, grUser);
-    await prefs.setString(_kGrKey, grKey);
     if (grLastSync != null) await prefs.setString(_kGrLast, grLastSync!.toIso8601String());
   }
 
@@ -157,100 +148,101 @@ class LibraryStore extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Connects a Goodreads account from a profile/shelf/RSS link. Returns an error message or null.
-  String? connectGoodreads(String input) {
-    final acc = GoodreadsSync.parse(input);
-    if (acc == null) return 'That doesn\'t look like a Goodreads profile link.';
-    grUser = acc.userId;
-    grKey = acc.key;
-    grLastSync = null;
-    _scheduleSave();
-    notifyListeners();
-    return null;
-  }
-
-  void disconnectGoodreads() {
-    grUser = '';
-    grKey = '';
-    grLastSync = null;
-    syncMessage = '';
-    _scheduleSave();
-    notifyListeners();
-  }
-
-  /// Syncs if connected and the last sync is older than [maxAge] (or always when maxAge is null).
-  Future<String?> syncGoodreads({Duration? maxAge}) async {
-    if (!grConnected || syncing) return null;
-    if (maxAge != null && grLastSync != null && DateTime.now().difference(grLastSync!) < maxAge) return null;
-    syncing = true;
-    syncMessage = 'Syncing with Goodreads…';
-    notifyListeners();
-    try {
-      final items = await GoodreadsSync.fetchAll(GoodreadsAccount(grUser, grKey));
-      var added = 0, updated = 0;
-      final byGr = <String, Book>{};
-      final byIsbn = <String, Book>{};
-      final byKey = <String, Book>{};
-      for (final b in _books) {
-        if (b.goodreadsId.isNotEmpty) byGr[b.goodreadsId] = b;
-        if (b.isbn.isNotEmpty) byIsbn[isbn13(b.isbn)] = b;
-        byKey[GoodreadsSync.matchKey(b.title, b.author)] = b;
-      }
-      for (final g in items) {
-        if (g.title.isEmpty) continue;
-        var b = byGr[g.grId] ??
-            (g.isbn.isNotEmpty ? byIsbn[isbn13(g.isbn)] : null) ??
-            byKey[GoodreadsSync.matchKey(g.title, g.author)];
-        if (b == null) {
-          final t = g.title;
-          final cut = t.indexOf(RegExp(r' \(|: '));
-          b = Book(
-            id: 'g${g.grId}',
-            title: cut > 2 ? t.substring(0, cut) : t,
-            subtitle: cut > 2 ? t.substring(cut).replaceAll(RegExp(r'^[ :(]+|\)$'), '') : '',
-            author: g.author,
-            isbn: g.isbn,
-            pages: g.pages,
-            year: g.year,
-            summary: g.description,
-            coverUrl: g.imageUrl,
-            added: g.addedAt,
-          );
-          _books.add(b);
-          byGr[g.grId] = b;
-          added++;
-          b.grSig = '';
-        }
-        b.goodreadsId = g.grId;
-        if (b.isbn.isEmpty && g.isbn.isNotEmpty) b.isbn = g.isbn;
-        if (b.pages == null && g.pages != null) b.pages = g.pages;
-        if (b.coverUrl.isEmpty && g.imageUrl.isNotEmpty) b.coverUrl = g.imageUrl;
-        if (b.summary.isEmpty && g.description.isNotEmpty) b.summary = g.description;
-        if (b.grSig == g.signature) continue; // nothing changed on Goodreads since last time
-        final wasNew = b.grSig.isEmpty && added > 0 && b.id == 'g${g.grId}';
-        b.status = g.status;
-        if (g.rating > 0) b.rating = g.rating;
-        if (g.readAt != null) b.end = g.readAt;
-        if (g.status == ReadStatus.reading) b.start ??= g.addedAt;
-        if (g.status == ReadStatus.read && b.pages != null) b.currentPage = b.pages!;
-        if (g.review.isNotEmpty) b.review = g.review;
-        b.grSig = g.signature;
-        if (!wasNew) updated++;
-      }
-      grLastSync = DateTime.now();
-      syncMessage = 'Synced with Goodreads: ${items.length} books checked, $added new, $updated updated.';
-      return syncMessage;
-    } on GoodreadsException catch (e) {
-      syncMessage = e.message;
-      return syncMessage;
-    } catch (_) {
-      syncMessage = 'Couldn\'t reach Goodreads. Check your internet and try again.';
-      return syncMessage;
-    } finally {
-      syncing = false;
-      _scheduleSave();
-      notifyListeners();
+  /// Reads the CSV from Goodreads → My Books → Import and export → Export Library,
+  /// and merges it into the shelf. Returns a short summary for the user.
+  String importGoodreadsCsv(String text) {
+    final rows = parseCsv(text.replaceFirst('﻿', '').trim());
+    if (rows.length < 2 || !rows.first.contains('Exclusive Shelf')) {
+      return 'That file doesn\'t look like a Goodreads export. Use “Export Library” on goodreads.com.';
     }
+    final h = rows.first.map((e) => e.trim()).toList();
+    String v(List<String> r, String n) {
+      final i = h.indexOf(n);
+      if (i < 0 || i >= r.length) return '';
+      return r[i].trim().replaceAll(RegExp(r'^="?|"$'), '');
+    }
+
+    DateTime? d(String s) {
+      final m = RegExp(r'(\d{4})[/-](\d{1,2})[/-](\d{1,2})').firstMatch(s);
+      return m == null ? null : DateTime(int.parse(m.group(1)!), int.parse(m.group(2)!), int.parse(m.group(3)!));
+    }
+
+    final items = <GrItem>[];
+    for (final r in rows.skip(1)) {
+      final title = v(r, 'Title');
+      if (title.isEmpty) continue;
+      final isbn13 = v(r, 'ISBN13');
+      items.add(GrItem(
+        grId: v(r, 'Book Id'),
+        title: title,
+        author: v(r, 'Author'),
+        isbn: isbn13.isNotEmpty ? isbn13 : v(r, 'ISBN'),
+        review: v(r, 'My Review').replaceAll(RegExp(r'<br\s*/?>', caseSensitive: false), '\n').replaceAll(RegExp(r'<[^>]+>'), ''),
+        imageUrl: '',
+        description: '',
+        shelf: v(r, 'Exclusive Shelf'),
+        rating: double.tryParse(v(r, 'My Rating')) ?? 0,
+        readAt: d(v(r, 'Date Read')),
+        addedAt: d(v(r, 'Date Added')),
+        pages: int.tryParse(v(r, 'Number of Pages')),
+        year: int.tryParse(v(r, 'Original Publication Year')) ?? int.tryParse(v(r, 'Year Published')),
+      ));
+    }
+    final (added, updated) = _mergeGoodreads(items);
+    grLastSync = DateTime.now();
+    syncMessage = 'Goodreads import: ${items.length} books checked, $added new, $updated updated.';
+    _scheduleSave();
+    notifyListeners();
+    return syncMessage;
+  }
+
+  (int, int) _mergeGoodreads(List<GrItem> items) {
+    var added = 0, updated = 0;
+    final byGr = <String, Book>{};
+    final byIsbn = <String, Book>{};
+    final byKey = <String, Book>{};
+    for (final b in _books) {
+      if (b.goodreadsId.isNotEmpty) byGr[b.goodreadsId] = b;
+      if (b.isbn.isNotEmpty) byIsbn[isbn13(b.isbn)] = b;
+      byKey[GoodreadsSync.matchKey(b.title, b.author)] = b;
+    }
+    for (final g in items) {
+      Book? b = (g.grId.isNotEmpty ? byGr[g.grId] : null) ??
+          (g.isbn.isNotEmpty ? byIsbn[isbn13(g.isbn)] : null) ??
+          byKey[GoodreadsSync.matchKey(g.title, g.author)];
+      var isNew = false;
+      if (b == null) {
+        final t = g.title;
+        final cut = t.indexOf(RegExp(r' \(|: '));
+        b = Book(
+          id: g.grId.isNotEmpty ? 'g${g.grId}' : 'u${DateTime.now().microsecondsSinceEpoch}$added',
+          title: cut > 2 ? t.substring(0, cut) : t,
+          subtitle: cut > 2 ? t.substring(cut).replaceAll(RegExp(r'^[ :(]+|\)$'), '') : '',
+          author: g.author,
+          isbn: g.isbn,
+          pages: g.pages,
+          year: g.year,
+          added: g.addedAt,
+        );
+        _books.add(b);
+        if (g.grId.isNotEmpty) byGr[g.grId] = b;
+        isNew = true;
+        added++;
+      }
+      if (g.grId.isNotEmpty) b.goodreadsId = g.grId;
+      if (b.isbn.isEmpty && g.isbn.isNotEmpty) b.isbn = g.isbn;
+      if (b.pages == null && g.pages != null) b.pages = g.pages;
+      if (b.grSig == g.signature) continue; // unchanged on Goodreads since the last import
+      b.status = g.status;
+      if (g.rating > 0) b.rating = g.rating;
+      if (g.readAt != null) b.end = g.readAt;
+      if (g.status == ReadStatus.reading) b.start ??= g.addedAt;
+      if (g.status == ReadStatus.read && b.pages != null) b.currentPage = b.pages!;
+      if (g.review.trim().isNotEmpty) b.review = g.review.trim();
+      b.grSig = g.signature;
+      if (!isNew) updated++;
+    }
+    return (added, updated);
   }
 
   void setShowCovers(bool v) {

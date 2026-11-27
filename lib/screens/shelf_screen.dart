@@ -23,20 +23,8 @@ class ShelfScreen extends StatelessWidget {
     final width = MediaQuery.sizeOf(context).width;
     final cols = (width / 150).floor().clamp(2, 8).toInt();
 
-    return RefreshIndicator(
-      onRefresh: () async {
-        if (!store.grConnected) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-              content: Text('Connect Goodreads in the Stats tab to sync by pulling down.')));
-          return;
-        }
-        final msg = await store.syncGoodreads();
-        if (msg != null && context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
-        }
-      },
+    return Container(
       child: CustomScrollView(
-      physics: const AlwaysScrollableScrollPhysics(),
       slivers: [
         const SliverToBoxAdapter(child: _Header()),
         SliverPersistentHeader(pinned: true, delegate: _FilterBarDelegate()),
