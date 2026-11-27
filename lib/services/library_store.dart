@@ -42,7 +42,10 @@ class LibraryStore extends ChangeNotifier {
   // UI filter state
   String query = '';
   String statusFilter = 'all'; // all | tbr | reading | read | dnf | fav | own | wish | ownunread | readyr
-  int tab = 0; // 0 shelf · 1 wishlist · 2 stats
+  int tab = 0; // 0 shelf · 1 read · 2 wishlist · 3 stats
+  int page = 0;
+  int pageSize = 24; // 0 = all
+  int scrollTick = 0; // bumps when the shelf should jump to the book list
   String statsYear = '${DateTime.now().year}'; // or 'all'
   String genreFilter = '';
   SortBy sort = SortBy.title;
@@ -66,6 +69,7 @@ class LibraryStore extends ChangeNotifier {
     }
     goal = prefs.getInt(_kGoal) ?? 24;
     showCovers = prefs.getBool(_kCovers) ?? true;
+    pageSize = prefs.getInt('page_size_v1') ?? 24;
     final last = prefs.getString(_kGrLast);
     grLastSync = last == null ? null : DateTime.tryParse(last);
     loaded = true;
@@ -82,6 +86,7 @@ class LibraryStore extends ChangeNotifier {
     await prefs.setString(_kBooks, Book.encodeList(_books));
     await prefs.setInt(_kGoal, goal);
     await prefs.setBool(_kCovers, showCovers);
+    await prefs.setInt('page_size_v1', pageSize);
     if (grLastSync != null) await prefs.setString(_kGrLast, grLastSync!.toIso8601String());
   }
 
@@ -259,6 +264,7 @@ class LibraryStore extends ChangeNotifier {
     if (status != null) statusFilter = status;
     if (genre != null) genreFilter = genre;
     if (sortBy != null) sort = sortBy;
+    page = 0;
     notifyListeners();
   }
 
@@ -330,14 +336,16 @@ class LibraryStore extends ChangeNotifier {
   void goTo(String key) {
     if (key == 'pages' || key == 'year') {
       statsYear = key == 'year' ? '${DateTime.now().year}' : 'all';
-      tab = 2;
+      tab = 3;
     } else if (key == 'wish') {
-      tab = 1;
+      tab = 2;
     } else {
       statusFilter = statusFilter == key && key != 'readyr' ? 'all' : key;
       query = '';
       genreFilter = '';
+      page = 0;
       tab = 0;
+      scrollTick++;
     }
     notifyListeners();
   }
@@ -346,6 +354,20 @@ class LibraryStore extends ChangeNotifier {
     statusFilter = 'all';
     query = '';
     genreFilter = '';
+    page = 0;
+    notifyListeners();
+  }
+
+  void setPage(int p) {
+    page = p;
+    scrollTick++;
+    notifyListeners();
+  }
+
+  void setPageSize(int s) {
+    pageSize = s;
+    page = 0;
+    _scheduleSave();
     notifyListeners();
   }
 

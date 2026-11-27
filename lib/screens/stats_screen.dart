@@ -404,7 +404,7 @@ class _ImportPanel extends StatelessWidget {
     final msg = store.importAmazon(LibraryStore.csvMaps(FileChannel.text(f.$2)));
     if (context.mounted) {
       _snack(context, msg);
-      store.setTab(1);
+      store.setTab(2);
     }
   }
 

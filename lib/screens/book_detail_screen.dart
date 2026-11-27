@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -9,6 +10,8 @@ import '../theme.dart';
 import '../widgets/book_cover.dart';
 import '../widgets/star_rating.dart';
 import 'wishlist_screen.dart' show AmazonButton;
+import '../ebook/ebook_store.dart';
+import '../ebook/ebooks_screen.dart' show openReader;
 
 class BookDetailScreen extends StatefulWidget {
   final String bookId;
@@ -51,6 +54,35 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
     if (!ok && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Couldn\'t open the link.')));
     }
+  }
+
+  Future<void> _postReview(Book b, {required bool goodreads}) async {
+    if (b.review.trim().isEmpty && b.rating == 0) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Write a review or give a rating first.')));
+      return;
+    }
+    final full = b.rating.floor();
+    final stars = '★' * full + (b.rating - full >= 0.5 ? '½' : '') + '☆' * (5 - b.rating.ceil());
+    final text = [if (b.rating > 0) '$stars (${b.rating}/5)', if (b.review.trim().isNotEmpty) b.review.trim()].join('\n\n');
+    await Clipboard.setData(ClipboardData(text: text));
+    final i = b.isbn.replaceAll(RegExp(r'[^0-9Xx]'), '').toUpperCase();
+    final asin = i.length == 10 ? i : (i.length == 13 && i.startsWith('978') ? Book.isbn13to10(i) : '');
+    final url = goodreads
+        ? (b.goodreadsId.isNotEmpty
+            ? 'https://www.goodreads.com/review/edit/${b.goodreadsId}'
+            : GoodreadsSync.goodreadsUrl(b))
+        : (asin.isNotEmpty ? 'https://www.amazon.in/review/create-review?asin=$asin' : b.amazonLink);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      duration: const Duration(seconds: 6),
+      content: Text(goodreads
+          ? 'Review copied. On Goodreads, sign in if asked, tap your stars, paste the review and Post.'
+          : (asin.isNotEmpty
+              ? 'Review copied. On Amazon, pick your stars, paste the review and Submit.'
+              : 'Review copied. Open the book on Amazon, scroll to “Write a product review”, paste and submit.')),
+    ));
+    await _open(url);
   }
 
   Future<void> _pickDate(LibraryStore store, Book b, bool isStart) async {
@@ -156,6 +188,19 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
               ),
             ],
           ),
+          Builder(builder: (context) {
+            final eb = context.watch<EbookStore>().forBook(b.id);
+            if (eb == null) return const SizedBox.shrink();
+            return Padding(
+              padding: const EdgeInsets.only(top: 14),
+              child: FilledButton.icon(
+                style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+                icon: const Icon(Icons.chrome_reader_mode),
+                label: Text(eb.progress > 0 ? 'Continue reading · ${(eb.progress * 100).round()}%' : 'Read now'),
+                onPressed: () => openReader(context, eb),
+              ),
+            );
+          }),
           const SizedBox(height: 14),
           Row(
             children: [
@@ -432,6 +477,26 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
               b.review = v;
               store.touch(b);
             },
+          ),
+          const SizedBox(height: 8),
+          Text('Post it: your stars and review are copied — paste them on the page that opens and submit.',
+              style: TextStyle(color: muted, fontSize: 12.5)),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              OutlinedButton.icon(
+                icon: const Icon(Icons.menu_book_outlined, size: 18),
+                label: const Text('Post on Goodreads'),
+                onPressed: () => _postReview(b, goodreads: true),
+              ),
+              OutlinedButton.icon(
+                icon: const Icon(Icons.shopping_bag_outlined, size: 18),
+                label: const Text('Post on Amazon'),
+                onPressed: () => _postReview(b, goodreads: false),
+              ),
+            ],
           ),
           label('Favourite quote'),
           TextField(

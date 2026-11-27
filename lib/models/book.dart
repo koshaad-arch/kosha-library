@@ -25,7 +25,7 @@ const kMoods = [
   'inspiring', 'fast-paced', 'slow burn', 'twisty', 'comforting',
 ];
 
-const kFormats = ['Paperback', 'Hardcover', 'Kindle', 'Audiobook'];
+const kFormats = ['Paperback', 'Hardcover', 'Kindle', 'eBook', 'Audiobook'];
 
 /// own = on your shelf · wish = need to buy · none = read/borrowed, not owned
 const kOwnLabels = {'own': '📚 Own it', 'wish': '🛒 Need to buy', 'none': "📖 Don't own"};

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import 'ebook/ebook_store.dart';
 import 'screens/home_screen.dart';
 import 'services/library_store.dart';
 import 'theme.dart';
@@ -8,8 +9,11 @@ import 'theme.dart';
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(
-    ChangeNotifierProvider(
-      create: (_) => LibraryStore()..load(),
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => LibraryStore()..load()),
+        ChangeNotifierProvider(create: (_) => EbookStore()..load()),
+      ],
       child: const KoshaLibraryApp(),
     ),
   );

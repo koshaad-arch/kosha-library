@@ -21,6 +21,9 @@ jobs:
         run: |
           flutter analyze --no-fatal-infos --no-fatal-warnings > build.log 2>&1 || true
           dart run tool/gr_check.dart >> build.log 2>&1 || true
+          curl -sL -o /tmp/pp.epub https://www.gutenberg.org/ebooks/1342.epub3.images || true
+          curl -sL -o /tmp/sh.epub https://www.gutenberg.org/ebooks/1661.epub.noimages || true
+          dart run tool/epub_check.dart /tmp/pp.epub /tmp/sh.epub >> build.log 2>&1 || true
           tail -40 build.log
       - name: Build APKs
         run: |

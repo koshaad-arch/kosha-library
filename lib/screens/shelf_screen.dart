@@ -13,13 +13,39 @@ void openBook(BuildContext context, Book b) => Navigator.push(
       MaterialPageRoute(builder: (_) => BookDetailScreen(bookId: b.id)),
     );
 
-class ShelfScreen extends StatelessWidget {
+class ShelfScreen extends StatefulWidget {
   const ShelfScreen({super.key});
+  @override
+  State<ShelfScreen> createState() => _ShelfScreenState();
+}
+
+class _ShelfScreenState extends State<ShelfScreen> {
+  final _listKey = GlobalKey();
+  int _seenTick = 0;
+
+  void _jumpToList() {
+    final ctx = _listKey.currentContext;
+    if (ctx == null) return;
+    final pos = Scrollable.of(ctx).position;
+    Scrollable.ensureVisible(ctx, duration: const Duration(milliseconds: 400), curve: Curves.easeOutCubic).then((_) {
+      // the search/filter bar stays pinned on top, so step back by its height
+      final target = (pos.pixels - 130).clamp(0.0, pos.maxScrollExtent);
+      pos.animateTo(target, duration: const Duration(milliseconds: 200), curve: Curves.easeOut);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     final store = context.watch<LibraryStore>();
-    final books = store.filtered;
+    if (store.scrollTick != _seenTick) {
+      _seenTick = store.scrollTick;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _jumpToList());
+    }
+    final allBooks = store.filtered;
+    final size = store.pageSize;
+    final pages = size == 0 ? 1 : ((allBooks.length + size - 1) ~/ size).clamp(1, 1 << 20);
+    final page = store.page.clamp(0, pages - 1);
+    final books = size == 0 ? allBooks : allBooks.skip(page * size).take(size).toList();
     final width = MediaQuery.sizeOf(context).width;
     final cols = (width / 150).floor().clamp(2, 8).toInt();
 
@@ -39,10 +65,11 @@ class ShelfScreen extends StatelessWidget {
                 if (store.query.isNotEmpty) '“${store.query}”',
               ].where((x) => x.isNotEmpty).join(' · ');
               return Row(
+                key: _listKey,
                 children: [
                   Expanded(
                     child: Text(
-                      '${books.length} ${books.length == 1 ? 'book' : 'books'}${filtered ? ' · $what' : ' on your shelf'}',
+                      '${allBooks.length} ${allBooks.length == 1 ? 'book' : 'books'}${filtered ? ' · $what' : ' on your shelf'}',
                       style: const TextStyle(color: AppColors.mute),
                     ),
                   ),
@@ -67,7 +94,7 @@ class ShelfScreen extends StatelessWidget {
           )
         else
           SliverPadding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
             sliver: SliverGrid(
               gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: cols,
@@ -81,6 +108,12 @@ class ShelfScreen extends StatelessWidget {
               ),
             ),
           ),
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 110),
+            child: _Pager(page: page, pages: pages, total: allBooks.length, size: size, store: store),
+          ),
+        ),
       ],
     ),
     );
@@ -576,6 +609,76 @@ class _Tiles extends StatelessWidget {
           ),
         );
       }).toList(),
+    );
+  }
+}
+
+
+class _Pager extends StatelessWidget {
+  final int page, pages, total, size;
+  final LibraryStore store;
+  const _Pager({required this.page, required this.pages, required this.total, required this.size, required this.store});
+
+  @override
+  Widget build(BuildContext context) {
+    if (total <= 24) return const SizedBox.shrink();
+    final from = size == 0 ? 1 : page * size + 1;
+    final to = size == 0 ? total : ((page + 1) * size).clamp(0, total);
+    final nums = <int>[];
+    for (var k = 0; k < pages; k++) {
+      if (k == 0 || k == pages - 1 || (k - page).abs() <= 1) nums.add(k);
+    }
+    final items = <Widget>[];
+    int? prev;
+    for (final k in nums) {
+      if (prev != null && k - prev > 1) items.add(const Padding(padding: EdgeInsets.symmetric(horizontal: 2), child: Text('…')));
+      items.add(Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 2),
+        child: k == page
+            ? FilledButton(onPressed: null, style: FilledButton.styleFrom(minimumSize: const Size(44, 44), padding: EdgeInsets.zero), child: Text('${k + 1}'))
+            : OutlinedButton(
+                onPressed: () => store.setPage(k),
+                style: OutlinedButton.styleFrom(minimumSize: const Size(44, 44), padding: EdgeInsets.zero),
+                child: Text('${k + 1}')),
+      ));
+      prev = k;
+    }
+    return Column(
+      children: [
+        if (pages > 1)
+          Wrap(
+            alignment: WrapAlignment.center,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            runSpacing: 6,
+            children: [
+              IconButton(
+                  tooltip: 'Previous page',
+                  onPressed: page > 0 ? () => store.setPage(page - 1) : null,
+                  icon: const Icon(Icons.chevron_left)),
+              ...items,
+              IconButton(
+                  tooltip: 'Next page',
+                  onPressed: page < pages - 1 ? () => store.setPage(page + 1) : null,
+                  icon: const Icon(Icons.chevron_right)),
+            ],
+          ),
+        const SizedBox(height: 6),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text('$from–$to of $total  ·  Show ', style: const TextStyle(color: AppColors.mute)),
+            DropdownButton<int>(
+              value: size,
+              underline: const SizedBox.shrink(),
+              items: const [24, 48, 96, 0]
+                  .map((z) => DropdownMenuItem(value: z, child: Text(z == 0 ? 'all' : '$z')))
+                  .toList(),
+              onChanged: (v) => store.setPageSize(v ?? 24),
+            ),
+            const Text(' per page', style: TextStyle(color: AppColors.mute)),
+          ],
+        ),
+      ],
     );
   }
 }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../services/library_store.dart';
+import '../ebook/ebooks_screen.dart';
 import 'add_book_screen.dart';
 import 'shelf_screen.dart';
 import 'stats_screen.dart';
@@ -21,16 +22,16 @@ class HomeScreen extends StatelessWidget {
         bottom: false,
         child: IndexedStack(
           index: store.tab,
-          children: const [ShelfScreen(), WishlistScreen(), StatsScreen()],
+          children: const [ShelfScreen(), EbooksScreen(), WishlistScreen(), StatsScreen()],
         ),
       ),
-      floatingActionButton: store.tab == 2
+      floatingActionButton: store.tab == 1 || store.tab == 3
           ? null
           : FloatingActionButton.extended(
               onPressed: () => Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) => AddBookScreen(startScanning: true, defaultOwn: store.tab == 1 ? 'wish' : 'own'),
+                  builder: (_) => AddBookScreen(startScanning: true, defaultOwn: store.tab == 2 ? 'wish' : 'own'),
                 ),
               ),
               icon: const Icon(Icons.qr_code_scanner_rounded),
@@ -42,6 +43,8 @@ class HomeScreen extends StatelessWidget {
         destinations: [
           const NavigationDestination(
               icon: Icon(Icons.auto_stories_outlined), selectedIcon: Icon(Icons.auto_stories), label: 'Shelf'),
+          const NavigationDestination(
+              icon: Icon(Icons.chrome_reader_mode_outlined), selectedIcon: Icon(Icons.chrome_reader_mode), label: 'Read'),
           NavigationDestination(
             icon: Badge(
               isLabelVisible: store.wishlist.isNotEmpty,
