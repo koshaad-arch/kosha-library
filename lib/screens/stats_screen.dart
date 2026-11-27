@@ -110,7 +110,14 @@ class StatsScreen extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 40),
       children: [
-        Text('Your reading, in numbers', style: serif(28, color: scheme.onSurface)),
+        Row(children: [
+          Expanded(child: Text('Your reading, in numbers', style: serif(28, color: scheme.onSurface))),
+          IconButton(
+            tooltip: 'Settings',
+            icon: const Icon(Icons.settings_outlined),
+            onPressed: () => openSettings(context),
+          ),
+        ]),
         const SizedBox(height: 10),
         SizedBox(
           height: 40,
@@ -188,6 +195,80 @@ class StatsScreen extends StatelessWidget {
           title: 'Waiting on your shelf',
           child: _HBars(data: tally(store.books.where((b) => b.status == ReadStatus.tbr).map((b) => b.genre))),
         ),
+      ],
+    );
+  }
+
+  Future<void> _importWebCsv(BuildContext context, LibraryStore store) async {
+    final ctrl = TextEditingController();
+    final clip = await Clipboard.getData(Clipboard.kTextPlain);
+    if (clip?.text?.startsWith('Title,') == true) ctrl.text = clip!.text!;
+    if (!context.mounted) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('Import from the web tracker'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('On the web page tap “Copy my library as CSV”, then paste it here.', style: TextStyle(fontSize: 13)),
+            const SizedBox(height: 8),
+            TextField(controller: ctrl, minLines: 5, maxLines: 8, decoration: const InputDecoration(hintText: 'Paste the CSV')),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Import')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    final (updated, added) = store.importCsv(ctrl.text);
+    if (context.mounted) _snack(context, 'Updated $updated books, added $added new');
+  }
+}
+
+
+void openSettings(BuildContext context) =>
+    Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen()));
+
+/// Imports, backup and app settings — kept apart from the reading stats.
+class SettingsScreen extends StatelessWidget {
+  const SettingsScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final store = context.watch<LibraryStore>();
+    final muted = Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6);
+    return Scaffold(
+      appBar: AppBar(title: const Text('Settings')),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 40),
+        children: [
+        _Panel(
+          title: 'Page numbers',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '${store.books.length - store.missingPages} of ${store.books.length} books have their real page count. '
+                'Missing ones are looked up online by ISBN (Google Books, Open Library) automatically.',
+                style: TextStyle(color: muted, fontSize: 13),
+              ),
+              if (store.pagesMessage.isNotEmpty) ...[
+                const SizedBox(height: 6),
+                Text(store.pagesMessage, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+              ],
+              if (store.findingPages) const Padding(padding: EdgeInsets.only(top: 8), child: LinearProgressIndicator()),
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                icon: const Icon(Icons.auto_stories_outlined),
+                label: const Text('Find missing page numbers'),
+                onPressed: store.findingPages ? null : () => store.findMissingPages(retryAll: true),
+              ),
+            ],
+          ),
+        ),
         const _Panel(title: 'Bring in your Goodreads', child: _GoodreadsPanel()),
         const _Panel(title: 'Your owned books & Amazon wishlist', child: _ImportPanel()),
         _Panel(
@@ -251,37 +332,12 @@ class StatsScreen extends StatelessWidget {
             ],
           ),
         ),
-      ],
-    );
-  }
-
-  Future<void> _importWebCsv(BuildContext context, LibraryStore store) async {
-    final ctrl = TextEditingController();
-    final clip = await Clipboard.getData(Clipboard.kTextPlain);
-    if (clip?.text?.startsWith('Title,') == true) ctrl.text = clip!.text!;
-    if (!context.mounted) return;
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (c) => AlertDialog(
-        title: const Text('Import from the web tracker'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('On the web page tap “Copy my library as CSV”, then paste it here.', style: TextStyle(fontSize: 13)),
-            const SizedBox(height: 8),
-            TextField(controller: ctrl, minLines: 5, maxLines: 8, decoration: const InputDecoration(hintText: 'Paste the CSV')),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Import')),
         ],
       ),
     );
-    if (ok != true) return;
-    final (updated, added) = store.importCsv(ctrl.text);
-    if (context.mounted) _snack(context, 'Updated $updated books, added $added new');
   }
+
+  Future<void> _importWebCsv(BuildContext context, LibraryStore store) => const StatsScreen()._importWebCsv(context, store);
 }
 
 class _GoodreadsPanel extends StatelessWidget {

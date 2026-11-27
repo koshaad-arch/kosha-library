@@ -21,12 +21,9 @@ jobs:
         run: |
           flutter analyze --no-fatal-infos --no-fatal-warnings > build.log 2>&1 || true
           dart run tool/gr_check.dart >> build.log 2>&1 || true
-          curl -s 'https://gutendex.com/books/?search=pride%20prejudice&mime_type=application/epub' | head -c 700 >> build.log; echo >> build.log
-          curl -sIL -A 'Dart/3.8 (dart:io)' https://www.gutenberg.org/ebooks/1342.epub3.images | grep -iE '^HTTP|^location|^content-type' >> build.log || true
-          curl -sL -A 'Dart/3.8 (dart:io)' -o /tmp/pp.epub https://www.gutenberg.org/ebooks/1342.epub3.images || true
-          curl -sL -A 'Dart/3.8 (dart:io)' -o /tmp/sh.epub https://www.gutenberg.org/ebooks/1661.epub.noimages || true
-          ls -la /tmp/*.epub >> build.log; head -c 300 /tmp/pp.epub | strings | head -5 >> build.log
-          dart run tool/epub_check.dart /tmp/pp.epub /tmp/sh.epub >> build.log 2>&1 || true
+          python3 tool/make_test_epub.py /tmp/test.epub
+          dart run tool/epub_check.dart /tmp/test.epub >> build.log 2>&1 || true
+          dart run tool/pages_check.dart >> build.log 2>&1 || true
           tail -40 build.log
       - name: Build APKs
         run: |

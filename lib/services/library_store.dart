@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/book.dart';
 import 'goodreads_sync.dart';
+import 'page_finder.dart';
 
 enum SortBy { title, author, rating, finished, shortest, recentlyAdded }
 
@@ -38,6 +39,11 @@ class LibraryStore extends ChangeNotifier {
   String syncMessage = '';
 
   bool loaded = false;
+
+  // page-number lookup
+  bool findingPages = false;
+  String pagesMessage = '';
+  final Set<String> _pageTried = {};
 
   // UI filter state
   String query = '';
@@ -72,8 +78,10 @@ class LibraryStore extends ChangeNotifier {
     pageSize = prefs.getInt('page_size_v1') ?? 24;
     final last = prefs.getString(_kGrLast);
     grLastSync = last == null ? null : DateTime.tryParse(last);
+    _pageTried.addAll(prefs.getStringList('pages_tried_v1') ?? []);
     loaded = true;
     notifyListeners();
+    Future.delayed(const Duration(seconds: 4), () => findMissingPages());
   }
 
   void _scheduleSave() {
@@ -251,6 +259,51 @@ class LibraryStore extends ChangeNotifier {
       if (!isNew) updated++;
     }
     return (added, updated);
+  }
+
+  int get missingPages => _books.where((b) => (b.pages ?? 0) <= 0).length;
+
+  /// Fills in real page counts for books that have none (runs in the background).
+  /// [retryAll] also retries books that weren't found before.
+  Future<void> findMissingPages({bool retryAll = false}) async {
+    if (findingPages) return;
+    if (retryAll) _pageTried.clear();
+    final todo = _books.where((b) => (b.pages ?? 0) <= 0 && !_pageTried.contains(b.id)).toList();
+    if (todo.isEmpty) {
+      pagesMessage = missingPages == 0 ? 'Every book has its page count.' : '$missingPages books could not be found online — add their pages by hand.';
+      notifyListeners();
+      return;
+    }
+    findingPages = true;
+    var found = 0, done = 0;
+    pagesMessage = 'Looking up page numbers… 0 of ${todo.length}';
+    notifyListeners();
+    var i = 0;
+    Future<void> worker() async {
+      while (i < todo.length) {
+        final b = todo[i++];
+        final p = await PageFinder.find(b);
+        done++;
+        _pageTried.add(b.id);
+        if (p != null && (b.pages ?? 0) <= 0) {
+          b.pages = p;
+          if (b.status == ReadStatus.read) b.currentPage = p;
+          found++;
+        }
+        pagesMessage = 'Looking up page numbers… $done of ${todo.length} ($found found)';
+        if (done % 5 == 0) _scheduleSave();
+        notifyListeners();
+      }
+    }
+
+    await Future.wait([worker(), worker(), worker()]);
+    findingPages = false;
+    pagesMessage = 'Found page numbers for $found of ${todo.length} books.'
+        '${missingPages > 0 ? ' $missingPages still missing — you can type them on the book page.' : ''}';
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList('pages_tried_v1', _pageTried.toList());
+    _scheduleSave();
+    notifyListeners();
   }
 
   void setShowCovers(bool v) {

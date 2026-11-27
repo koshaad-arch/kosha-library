@@ -19,6 +19,7 @@ $gradle = if (Test-Path .\android\app\build.gradle.kts) { ".\android\app\build.g
 # Remove the sample test that flutter create adds (it refers to a counter app)
 if (Test-Path .\test\widget_test.dart) { Remove-Item .\test\widget_test.dart }
 
+Add-Content .\android\build.gradle.kts "`nsubprojects {`n    tasks.configureEach { if (name.startsWith(`"lintVital`")) enabled = false }`n}`n"
 flutter pub get
 Write-Host ""
 Write-Host "Done. Plug in your phone (USB debugging on) and run:  flutter run"

@@ -7,6 +7,7 @@ import '../theme.dart';
 import '../widgets/book_cover.dart';
 import '../widgets/star_rating.dart';
 import 'book_detail_screen.dart';
+import 'stats_screen.dart' show openSettings;
 
 void openBook(BuildContext context, Book b) => Navigator.push(
       context,
@@ -139,7 +140,14 @@ class _Header extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text("Kosha's Library", style: serif(34, color: onPlum)),
+          Row(children: [
+            Expanded(child: Text("Kosha's Library", style: serif(34, color: onPlum))),
+            IconButton(
+              tooltip: 'Settings',
+              icon: const Icon(Icons.settings_outlined, color: onPlum),
+              onPressed: () => openSettings(context),
+            ),
+          ]),
           const SizedBox(height: 14),
           _Tiles(store: store),
           const SizedBox(height: 12),
