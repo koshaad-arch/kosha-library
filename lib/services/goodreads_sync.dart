@@ -50,7 +50,7 @@ class GoodreadsSync {
   static GoodreadsAccount? parse(String input) {
     final s = input.trim();
     final id = RegExp(r'(?:user/show|review/list(?:_rss)?|list_rss)/(\d+)').firstMatch(s)?.group(1) ??
-        RegExp(r'^(\d{3,})').firstMatch(s)?.group(1);
+        RegExp(r'^(\d+)(?:-|$)').firstMatch(s)?.group(1);
     if (id == null) return null;
     final key = RegExp(r'[?&]key=([^&\s]+)').firstMatch(s)?.group(1) ?? '';
     return GoodreadsAccount(id, key);
