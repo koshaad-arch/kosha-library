@@ -1,0 +1,32 @@
+name: Test install on emulator
+on:
+  push:
+    paths: ['.github/workflows/test-install.yml']
+  workflow_dispatch:
+jobs:
+  install:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        api: [34, 35, 36]
+    steps:
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Download released APK
+        run: curl -sL -o app.apk https://github.com/${{ github.repository }}/releases/download/latest/KoshasLibrary.apk && ls -la app.apk
+      - uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api }}
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          script: |
+            adb install -r app.apk
+            adb shell pm list packages | grep kosha
+            adb shell monkey -p com.koshagandhi.kosha_library -c android.intent.category.LAUNCHER 1
+            sleep 15
+            adb logcat -d | grep -iE "kosha|flutter|FATAL|AndroidRuntime" | tail -60
