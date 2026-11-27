@@ -7,7 +7,7 @@ adb push tool/sample.pdf /sdcard/Download/sample-novel.pdf
 adb shell monkey -p com.koshagandhi.kosha_library -c android.intent.category.LAUNCHER 1
 sleep 25
 adb exec-out screencap -p > shot1-shelf.png
-tap "Reviews" ; sleep 3; adb exec-out screencap -p > shot2-reviews.png
+tap "✍ Reviews" ; sleep 3; adb exec-out screencap -p > shot2-reviews.png
 tap "Read" ; sleep 4
 tap "Add EPUB or PDF" ; sleep 6
 adb exec-out screencap -p > shot3-picker.png
