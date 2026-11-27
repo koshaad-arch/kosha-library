@@ -324,7 +324,11 @@ class _FreeBooksScreenState extends State<FreeBooksScreen> {
                     title: Text(f.title, maxLines: 2, overflow: TextOverflow.ellipsis),
                     subtitle: Text(f.author, maxLines: 1, overflow: TextOverflow.ellipsis),
                     trailing: _downloading.contains(f.id)
-                        ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
+                        ? const Row(mainAxisSize: MainAxisSize.min, children: [
+                            Text('Downloading…', style: TextStyle(fontSize: 12)),
+                            SizedBox(width: 8),
+                            SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2)),
+                          ])
                         : FilledButton.tonal(onPressed: () => _get(f), child: const Text('Get')),
                   ),
                 )),

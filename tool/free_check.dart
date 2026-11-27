@@ -8,12 +8,12 @@ Future<void> main() async {
     final urls = [
       'https://gutenberg.pglaf.org/cache/epub/$id/pg$id-images-3.epub',
       'https://aleph.pglaf.org/cache/epub/$id/pg$id-images-3.epub',
-      'https://gutenberg.pglaf.org/cache/epub/$id/pg$id-images.epub',
+      'https://gutenberg.pglaf.org/cache/epub/$id/pg$id.epub',
     ];
     var ok = false;
     for (final u in urls) {
       try {
-        final r = await http.get(Uri.parse(u)).timeout(const Duration(seconds: 60));
+        final r = await http.get(Uri.parse(u)).timeout(const Duration(seconds: 150));
         final b = r.bodyBytes;
         if (r.statusCode == 200 && b.length > 1000 && b[0] == 0x50 && b[1] == 0x4B) {
           final e = EpubBook.parse(b);

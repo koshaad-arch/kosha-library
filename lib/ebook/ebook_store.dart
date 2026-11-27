@@ -384,19 +384,18 @@ class EbookStore extends ChangeNotifier {
   /// answers "busy"), trying the newer EPUB3 file and then the classic EPUB.
   Future<Ebook> downloadFree(FreeBook f, LibraryStore library) async {
     final id = f.id;
+    // (address, seconds allowed) — the illustrated edition first, then the lighter text-only one
     final urls = [
-      'https://gutenberg.pglaf.org/cache/epub/$id/pg$id-images-3.epub',
-      'https://aleph.pglaf.org/cache/epub/$id/pg$id-images-3.epub',
-      'https://gutenberg.pglaf.org/cache/epub/$id/pg$id-images.epub',
-      'https://aleph.pglaf.org/cache/epub/$id/pg$id-images.epub',
-      'https://gutenberg.pglaf.org/cache/epub/$id/pg$id.epub',
-      'https://www.gutenberg.org/ebooks/$id.epub3.images',
-      'https://www.gutenberg.org/ebooks/$id.epub.images',
+      ('https://gutenberg.pglaf.org/cache/epub/$id/pg$id-images-3.epub', 150),
+      ('https://gutenberg.pglaf.org/cache/epub/$id/pg$id.epub', 90),
+      ('https://aleph.pglaf.org/cache/epub/$id/pg$id-images-3.epub', 150),
+      ('https://aleph.pglaf.org/cache/epub/$id/pg$id.epub', 90),
+      ('https://www.gutenberg.org/ebooks/$id.epub3.images', 90),
     ];
     Object? last;
-    for (final u in urls) {
+    for (final (u, secs) in urls) {
       try {
-        final r = await http.get(Uri.parse(u), headers: _ua).timeout(const Duration(seconds: 60));
+        final r = await http.get(Uri.parse(u), headers: _ua).timeout(Duration(seconds: secs));
         final b = r.bodyBytes;
         // a real EPUB is a zip file: it starts with "PK"
         if (r.statusCode == 200 && b.length > 1000 && b[0] == 0x50 && b[1] == 0x4B) {
