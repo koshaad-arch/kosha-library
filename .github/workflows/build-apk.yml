@@ -18,16 +18,21 @@ jobs:
           channel: stable
       - run: bash setup.sh
       - run: flutter build apk --release
+      - run: flutter build apk --release --split-per-abi
       - uses: actions/upload-artifact@v4
         with:
           name: kosha-library-apk
-          path: build/app/outputs/flutter-apk/app-release.apk
+          path: build/app/outputs/flutter-apk/*.apk
       - name: Rename APK
-        run: cp build/app/outputs/flutter-apk/app-release.apk KoshasLibrary.apk
+        run: |
+          cp build/app/outputs/flutter-apk/app-release.apk KoshasLibrary.apk
+          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk KoshasLibrary-small.apk
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: latest
           name: Kosha's Library (latest)
-          body: Tap KoshasLibrary.apk below to download and install on Android.
-          files: KoshasLibrary.apk
+          body: Download KoshasLibrary-small.apk (works on almost all phones). If it will not install, use KoshasLibrary.apk.
+          files: |
+            KoshasLibrary-small.apk
+            KoshasLibrary.apk
           make_latest: true
